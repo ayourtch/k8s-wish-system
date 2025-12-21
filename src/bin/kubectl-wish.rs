@@ -1,6 +1,5 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use k8s_openapi::api::core::v1::ObjectReference;
 use kube::{
     api::{Api, DeleteParams, ListParams, Patch, PatchParams, PostParams},
     Client, ResourceExt,
@@ -35,7 +34,7 @@ enum Commands {
         no_dry_run: bool,
 
         /// Optional name for the wish resource
-        #[arg(short, long)]
+        #[arg(long)]
         name: Option<String>,
     },
 

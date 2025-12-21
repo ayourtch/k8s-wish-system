@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 use futures::StreamExt;
 use k8s_openapi::api::core::v1::{ConfigMap, Secret};
 use kube::{
@@ -9,18 +9,29 @@ use kube::{
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
+use thiserror::Error;
 use tracing::{error, info, warn};
 use wish_system::{
     ExecutionPlan, LlmConfig, LlmMessage, LlmRequest, LlmResponse, Wish, WishPhase, WishStatus,
-    Command, CommandType, DryRunResult,
+    Command, DryRunResult,
 };
+
+#[derive(Error, Debug)]
+enum ReconcileError {
+    #[error("Kube error: {0}")]
+    KubeError(#[from] kube::Error),
+    #[error("Anyhow error: {0}")]
+    AnyhowError(#[from] anyhow::Error),
+    #[error("Other error: {0}")]
+    Other(String),
+}
 
 struct Context {
     client: Client,
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     info!("Starting wish-grantor controller");
@@ -39,7 +50,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn reconcile(wish: Arc<Wish>, ctx: Arc<Context>) -> Result<Action> {
+async fn reconcile(wish: Arc<Wish>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
     let namespace = wish.namespace().unwrap();
     let name = wish.name_any();
     
@@ -102,12 +113,12 @@ async fn reconcile(wish: Arc<Wish>, ctx: Arc<Context>) -> Result<Action> {
     }
 }
 
-fn error_policy(_wish: Arc<Wish>, error: &anyhow::Error, _ctx: Arc<Context>) -> Action {
+fn error_policy(_wish: Arc<Wish>, error: &ReconcileError, _ctx: Arc<Context>) -> Action {
     error!("Reconciliation error: {}", error);
     Action::requeue(Duration::from_secs(60))
 }
 
-async fn load_llm_config(client: &Client, namespace: &str, wish: &Wish) -> Result<LlmConfig> {
+async fn load_llm_config(client: &Client, namespace: &str, wish: &Wish) -> anyhow::Result<LlmConfig> {
     // Priority: wish spec > configmap > env vars
     if let Some(config) = &wish.spec.llm_config {
         return Ok(config.clone());
@@ -156,7 +167,7 @@ async fn get_secret_value(
     namespace: &str,
     secret_name: &str,
     key: &str,
-) -> Result<String> {
+) -> anyhow::Result<String> {
     let secret_api: Api<Secret> = Api::namespaced(client.clone(), namespace);
     let secret = secret_api.get(secret_name).await?;
 
@@ -175,7 +186,7 @@ async fn generate_plan(
     wish_text: &str,
     api_key: &Option<String>,
     dry_run: bool,
-) -> Result<(ExecutionPlan, String, Option<Vec<DryRunResult>>)> {
+) -> anyhow::Result<(ExecutionPlan, String, Option<Vec<DryRunResult>>)> {
     let system_prompt = r#"You are a Kubernetes operations assistant. Given a user's wish, you must:
 1. Assign a concise semantic name to the wish (lowercase-with-dashes)
 2. Generate the exact kubectl commands and/or YAML manifests needed to fulfill it
@@ -285,7 +296,7 @@ async fn update_status_granted(
     wish_name: &str,
     plan: &ExecutionPlan,
     dry_run_results: Option<Vec<DryRunResult>>,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     let api: Api<Wish> = Api::namespaced(client.clone(), namespace);
 
     let status = WishStatus {
@@ -313,7 +324,7 @@ async fn update_status_failed(
     namespace: &str,
     name: &str,
     error: &str,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     let api: Api<Wish> = Api::namespaced(client.clone(), namespace);
 
     let status = WishStatus {

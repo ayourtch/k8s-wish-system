@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 use chrono::Utc;
 use futures::StreamExt;
 use k8s_openapi::api::core::v1::ConfigMap;
@@ -12,8 +12,19 @@ use std::collections::HashSet;
 use std::process::Command as ProcessCommand;
 use std::sync::Arc;
 use std::time::Duration;
+use thiserror::Error;
 use tracing::{error, info, warn};
 use wish_system::{Command, CommandType, Wish, WishPhase, WishStatus};
+
+#[derive(Error, Debug)]
+enum ReconcileError {
+    #[error("Kube error: {0}")]
+    KubeError(#[from] kube::Error),
+    #[error("Anyhow error: {0}")]
+    AnyhowError(#[from] anyhow::Error),
+    #[error("Other error: {0}")]
+    Other(String),
+}
 
 struct Context {
     client: Client,
@@ -26,7 +37,7 @@ struct PermissionConfig {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     info!("Starting wish-fulfiller controller");
@@ -42,7 +53,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn reconcile(wish: Arc<Wish>, ctx: Arc<Context>) -> Result<Action> {
+async fn reconcile(wish: Arc<Wish>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
     let namespace = wish.namespace().unwrap();
     let name = wish.name_any();
 
@@ -103,7 +114,7 @@ async fn reconcile(wish: Arc<Wish>, ctx: Arc<Context>) -> Result<Action> {
     }
 }
 
-fn error_policy(_wish: Arc<Wish>, error: &anyhow::Error, _ctx: Arc<Context>) -> Action {
+fn error_policy(_wish: Arc<Wish>, error: &ReconcileError, _ctx: Arc<Context>) -> Action {
     error!("Reconciliation error: {}", error);
     Action::requeue(Duration::from_secs(60))
 }
@@ -126,7 +137,7 @@ impl Default for PermissionConfig {
     }
 }
 
-async fn load_permission_config(client: &Client, namespace: &str) -> Result<PermissionConfig> {
+async fn load_permission_config(client: &Client, namespace: &str) -> anyhow::Result<PermissionConfig> {
     let cm_api: Api<ConfigMap> = Api::namespaced(client.clone(), namespace);
     let cm = cm_api.get("wish-fulfiller-permissions").await?;
 
@@ -164,7 +175,7 @@ async fn execute_plan(
     commands: &[Command],
     namespace: &str,
     permissions: &PermissionConfig,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     for (i, cmd) in commands.iter().enumerate() {
         info!("Executing command {}/{}: {:?}", i + 1, commands.len(), cmd.command_type);
 
@@ -184,7 +195,7 @@ fn validate_command(
     cmd: &Command,
     namespace: &str,
     permissions: &PermissionConfig,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     // Check namespace
     if !permissions.allowed_namespaces.contains(namespace) {
         return Err(anyhow!(
@@ -216,7 +227,7 @@ fn validate_command(
     Ok(())
 }
 
-async fn execute_kubectl(cmd: &Command, namespace: &str) -> Result<()> {
+async fn execute_kubectl(cmd: &Command, namespace: &str) -> anyhow::Result<()> {
     let mut args: Vec<&str> = cmd.command.split_whitespace().collect();
     
     // Remove 'kubectl' if present
@@ -265,7 +276,7 @@ async fn execute_kubectl(cmd: &Command, namespace: &str) -> Result<()> {
     Ok(())
 }
 
-async fn execute_shell(cmd: &Command) -> Result<()> {
+async fn execute_shell(cmd: &Command) -> anyhow::Result<()> {
     info!("Executing shell command: {}", cmd.command);
 
     let output = ProcessCommand::new("sh")
@@ -288,7 +299,7 @@ async fn update_status_fulfilled(
     client: &Client,
     namespace: &str,
     name: &str,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     let api: Api<Wish> = Api::namespaced(client.clone(), namespace);
 
     let status = json!({
@@ -312,7 +323,7 @@ async fn update_status_failed(
     namespace: &str,
     name: &str,
     error: &str,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     let api: Api<Wish> = Api::namespaced(client.clone(), namespace);
 
     let status = WishStatus {

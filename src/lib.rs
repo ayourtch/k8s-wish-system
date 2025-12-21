@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 
 #[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]
 #[kube(
-    group = "magic.k8s.io",
+    group = "wish.ayourt.ch",
     version = "v1alpha1",
     kind = "Wish",
     plural = "wishes",
