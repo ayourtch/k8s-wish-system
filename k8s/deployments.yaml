@@ -1,0 +1,62 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wish-grantor
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wish-grantor
+  template:
+    metadata:
+      labels:
+        app: wish-grantor
+    spec:
+      serviceAccountName: wish-grantor
+      containers:
+      - name: controller
+        image: wish-grantor:latest
+        imagePullPolicy: Never  # For local development
+        env:
+        - name: RUST_LOG
+          value: "info"
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wish-fulfiller
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wish-fulfiller
+  template:
+    metadata:
+      labels:
+        app: wish-fulfiller
+    spec:
+      serviceAccountName: wish-fulfiller
+      containers:
+      - name: controller
+        image: wish-fulfiller:latest
+        imagePullPolicy: Never  # For local development
+        env:
+        - name: RUST_LOG
+          value: "info"
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"

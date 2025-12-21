@@ -1,0 +1,46 @@
+---
+# Example 1: Simple pod creation (dry-run by default)
+apiVersion: magic.k8s.io/v1alpha1
+kind: Wish
+metadata:
+  name: create-nginx-pod
+  namespace: default
+spec:
+  wish: "Create an nginx pod named my-nginx"
+  autoFulfill: false
+  dryRun: true
+---
+# Example 2: Auto-fulfill deployment
+apiVersion: magic.k8s.io/v1alpha1
+kind: Wish
+metadata:
+  name: deploy-app
+  namespace: default
+spec:
+  wish: "Deploy a redis instance with 3 replicas and persistent storage"
+  autoFulfill: true
+  dryRun: false
+---
+# Example 3: Custom LLM configuration
+apiVersion: magic.k8s.io/v1alpha1
+kind: Wish
+metadata:
+  name: create-service
+  namespace: default
+spec:
+  wish: "Create a LoadBalancer service for my-nginx pod on port 80"
+  dryRun: true
+  llmConfig:
+    endpoint: "http://ollama:11434/v1"
+    model: "llama3.2:latest"
+---
+# Example 4: Complex multi-resource wish
+apiVersion: magic.k8s.io/v1alpha1
+kind: Wish
+metadata:
+  name: full-app-stack
+  namespace: default
+spec:
+  wish: "Create a complete application stack with: postgres database with persistent volume, redis cache, and a web deployment with 2 replicas, all connected via services"
+  autoFulfill: false
+  dryRun: true

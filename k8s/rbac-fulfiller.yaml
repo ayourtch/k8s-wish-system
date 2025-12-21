@@ -1,0 +1,50 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wish-fulfiller
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wish-fulfiller-role
+rules:
+# Wish CRD access
+- apiGroups: ["magic.k8s.io"]
+  resources: ["wishes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["magic.k8s.io"]
+  resources: ["wishes/status"]
+  verbs: ["get", "patch", "update"]
+# Broad permissions for fulfilling wishes
+# NOTE: Adjust these based on your security requirements
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets", "persistentvolumeclaims"]
+  verbs: ["create", "get", "list", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets"]
+  verbs: ["create", "get", "list", "update", "patch", "delete"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["create", "get", "list", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["create", "get", "list", "update", "patch", "delete"]
+# Read ConfigMaps for permission config
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wish-fulfiller-binding
+subjects:
+- kind: ServiceAccount
+  name: wish-fulfiller
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: wish-fulfiller-role
+  apiGroup: rbac.authorization.k8s.io
