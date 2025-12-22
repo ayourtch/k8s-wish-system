@@ -1,7 +1,7 @@
 # Multi-stage build for wish-system runtime
 # This Dockerfile builds a single image containing both controllers
 
-FROM rust:1.83-bookworm as builder
+FROM rust:bookworm as builder
 
 WORKDIR /build
 
