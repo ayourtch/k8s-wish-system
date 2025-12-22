@@ -1,90 +1,192 @@
-# Wish System Quick Start Guide
+# Quick Start Guide
 
-Get up and running with the Wish System in 10 minutes.
+Get started with wish-system in under 5 minutes!
+
+## One-Line Install (Interactive)
+
+```bash
+./scripts/install.sh
+```
+
+This interactive script will:
+- ✓ Check prerequisites (kubectl, docker)
+- ✓ Detect or create a Kubernetes cluster
+- ✓ Install the wish-system components
+- ✓ Auto-detect local LLM services (Ollama, LM Studio)
+- ✓ Guide you through LLM configuration
+- ✓ Verify the installation
 
 ## Prerequisites
 
-- Kubernetes cluster (minikube, kind, or any cluster)
-- kubectl configured
-- Ollama running locally (or any OpenAI-compatible LLM endpoint)
+- **kubectl** - Kubernetes command-line tool
+- **docker** - Container runtime
+- **Kubernetes cluster** - Any cluster (Kind, Minikube, GKE, EKS, etc.)
 
-## Step 1: Install Ollama (if using local LLM)
+### Optional (for building from source)
+- **Rust** - https://rustup.rs/ (only if building from source)
+- **Kind** - https://kind.sigs.k8s.io/ (only for local testing)
 
-```bash
-# Install Ollama
-curl -fsSL https://ollama.com/install.sh | sh
+## Quick Install Steps
 
-# Pull a model
-ollama pull llama3.2
-
-# Verify it's running
-curl http://localhost:11434/v1/models
-```
-
-## Step 2: Build and Install
+### 1. Clone the repository
 
 ```bash
-# Clone/navigate to wish-system directory
+git clone https://github.com/yourusername/wish-system
 cd wish-system
-
-# Build binaries
-cargo build --release
-
-# Install kubectl plugin
-sudo cp target/release/kubectl-wish /usr/local/bin/
-
-# Build controller images (if deploying to cluster)
-./build-images.sh
-
-# If using kind, load images
-kind load docker-image wish-grantor:latest
-kind load docker-image wish-fulfiller:latest
 ```
 
-## Step 3: Deploy to Kubernetes
+### 2. Run the installer
 
 ```bash
-# Install CRD
-kubectl apply -f k8s/crd.yaml
-
-# Install RBAC
-kubectl apply -f k8s/rbac-grantor.yaml
-kubectl apply -f k8s/rbac-fulfiller.yaml
-
-# Install configuration
-kubectl apply -f k8s/config.yaml
-
-# Deploy controllers
-kubectl apply -f k8s/deployments.yaml
-
-# Verify controllers are running
-kubectl get pods
+./scripts/install.sh
 ```
 
-## Step 4: Create Your First Wish
+Follow the interactive prompts to:
+- Choose installation method (manifests or build from source)
+- Configure your LLM endpoint
+
+### 3. Create your first wish
 
 ```bash
-# Create a simple wish
-kubectl wish create "create an nginx pod named my-first-nginx"
+# Build kubectl-wish (if building from source)
+cargo build --release --bin kubectl-wish
 
-# Check the wish status
-kubectl wish list
+# Create a wish
+./target/release/kubectl-wish create "Deploy a simple nginx web server"
 
-# Describe the wish to see the plan
-kubectl wish describe <wish-name>
+# Or use kubectl directly
+kubectl apply -f - <<EOF
+apiVersion: wish.ayourt.ch/v1alpha1
+kind: Wish
+metadata:
+  name: my-first-wish
+spec:
+  wish: "Deploy a simple nginx web server"
+  autoFulfill: false
+  dryRun: true
+  targetNamespace: default
+EOF
 ```
 
-## Step 5: Review and Fulfill
+### 4. Monitor the wish
+
+```bash
+# List all wishes
+./target/release/kubectl-wish list
+
+# Describe a specific wish
+./target/release/kubectl-wish describe my-first-wish
+
+# Watch the status
+watch -n 2 './target/release/kubectl-wish list'
+```
+
+### 5. Fulfill the wish (if in dry-run mode)
 
 ```bash
 # Review the execution plan
-kubectl wish describe <wish-name>
+./target/release/kubectl-wish describe my-first-wish
 
-# If the plan looks good, fulfill it
-kubectl wish fulfill <wish-name>
+# If satisfied, fulfill it
+./target/release/kubectl-wish fulfill my-first-wish
+```
 
-# Verify the pod was created
-kubectl get pods
+## Standalone LLM Configuration
+
+If you skipped LLM configuration during install:
+
+```bash
+# Interactive configuration
+./scripts/configure-llm.sh
+
+# Or manual configuration
+./target/release/kubectl-wish configure \
+  --endpoint "http://localhost:11434/v1" \
+  --model "llama3.2:latest"
+
+# For OpenAI
+./target/release/kubectl-wish configure \
+  --endpoint "https://api.openai.com/v1" \
+  --model "gpt-4" \
+  --api-key "sk-..."
+
+# View current configuration
+./target/release/kubectl-wish configure --show
+```
+
+## Common LLM Endpoints
+
+### Ollama (Local)
+```bash
+# Install Ollama: https://ollama.ai/
+ollama pull llama3.2:latest
+
+./target/release/kubectl-wish configure \
+  --endpoint "http://localhost:11434/v1" \
+  --model "llama3.2:latest"
+```
+
+### LM Studio (Local)
+```bash
+# Install LM Studio: https://lmstudio.ai/
+# Load a model in LM Studio and start the server
+
+./target/release/kubectl-wish configure \
+  --endpoint "http://localhost:1234/v1" \
+  --model "your-model-name"
+```
+
+### OpenAI
+```bash
+./target/release/kubectl-wish configure \
+  --endpoint "https://api.openai.com/v1" \
+  --model "gpt-4" \
+  --api-key "$OPENAI_API_KEY"
+```
+
+### Azure OpenAI
+```bash
+./target/release/kubectl-wish configure \
+  --endpoint "https://your-resource.openai.azure.com/openai/deployments/your-deployment" \
+  --model "gpt-4" \
+  --api-key "$AZURE_OPENAI_KEY"
+```
+
+## Install kubectl-wish Plugin
+
+For easier command-line usage:
+
+```bash
+# Copy to PATH
+sudo cp target/release/kubectl-wish /usr/local/bin/
+
+# Now you can use:
+kubectl wish create "Deploy redis"
+kubectl wish list
+kubectl wish describe my-wish
+```
+
+## Example Wishes
+
+Try these example wishes to get started:
+
+```bash
+# Simple deployment
+kubectl wish create "Deploy nginx with 3 replicas"
+
+# With configuration
+kubectl wish create "Deploy a Redis instance with persistence enabled"
+
+# Multiple resources
+kubectl wish create "Create a complete web application with nginx frontend, backend API, and PostgreSQL database"
+
+# With specific requirements
+kubectl wish create "Deploy Prometheus monitoring with persistent storage in monitoring namespace" \
+  --target-namespace monitoring
+
+# Auto-fulfill (skip dry-run)
+kubectl wish create "Create a ConfigMap named app-config with key environment=production" \
+  --no-dry-run --auto-fulfill
 ```
 
 ## Example Session
@@ -151,69 +253,83 @@ NAME               READY   UP-TO-DATE   AVAILABLE   AGE
 nginx-deployment   3/3     3            3           10s
 ```
 
-## Common Wishes to Try
+## Verification
+
+Check that everything is running:
 
 ```bash
-# Create resources
-kubectl wish create "create a redis pod"
-kubectl wish create "deploy postgres with persistent storage"
-kubectl wish create "create a service for my nginx deployment"
+# Check controller pods
+kubectl get pods -n wish-system
 
-# Modify resources
-kubectl wish create "scale my-deployment to 5 replicas"
-kubectl wish create "update nginx image to nginx:1.24"
+# Should see:
+# wish-grantor-xxx    Running
+# wish-fulfiller-xxx  Running
 
-# Complex scenarios
-kubectl wish create "create a complete web app with frontend deployment, backend deployment, and mysql database"
+# Check CRD
+kubectl get crd wishes.wish.ayourt.ch
+
+# Check configuration
+kubectl wish configure --show
 ```
 
-## Cleanup
+## Troubleshooting
+
+### Controllers not starting
+```bash
+# Check logs
+kubectl logs -n wish-system deployment/wish-grantor
+kubectl logs -n wish-system deployment/wish-fulfiller
+
+# Check events
+kubectl get events -n wish-system --sort-by='.lastTimestamp'
+```
+
+### LLM connection issues
+```bash
+# Test LLM endpoint manually
+curl -X POST http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama3.2:latest",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+
+# Reconfigure
+./scripts/configure-llm.sh
+```
+
+### Wish stuck in "Requested" phase
+```bash
+# Check grantor logs
+kubectl logs -n wish-system deployment/wish-grantor -f
+
+# Check LLM configuration
+kubectl wish configure --show
+kubectl get configmap wish-grantor-config -n wish-system -o yaml
+```
+
+## Uninstall
 
 ```bash
-# Delete a wish
-kubectl wish delete <wish-name>
+# Delete all wishes first
+kubectl delete wishes --all -n default
 
-# Uninstall everything
-kubectl delete -f k8s/deployments.yaml
-kubectl delete -f k8s/config.yaml
-kubectl delete -f k8s/rbac-fulfiller.yaml
-kubectl delete -f k8s/rbac-grantor.yaml
-kubectl delete -f k8s/crd.yaml
+# Uninstall wish-system
+kubectl delete -f k8s/install.yaml
+
+# For Kind cluster
+make kind-delete
 ```
 
 ## Next Steps
 
-- Read the full [README.md](README.md) for detailed documentation
-- Customize the LLM configuration in `k8s/config.yaml`
-- Adjust permissions in `k8s/rbac-fulfiller.yaml`
-- Try the example wishes in `k8s/examples.yaml`
+- Read [INSTALL.md](INSTALL.md) for detailed installation options
+- Read [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment guidance
+- Check [README.md](README.md) for architecture and design details
 
-## Troubleshooting
+## Getting Help
 
-**Wish stuck in Requested:**
-```bash
-# Check grantor logs
-kubectl logs -l app=wish-grantor
-
-# Verify LLM endpoint
-curl http://localhost:11434/v1/models
-```
-
-**Wish failed:**
-```bash
-# Check fulfiller logs
-kubectl logs -l app=wish-fulfiller
-
-# Check wish details
-kubectl wish describe <wish-name>
-```
-
-**Controllers not starting:**
-```bash
-# Check pod status
-kubectl get pods
-kubectl describe pod <pod-name>
-
-# Check RBAC
-kubectl auth can-i get wishes --as=system:serviceaccount:default:wish-grantor
-```
+- Check logs: `kubectl logs -n wish-system deployment/wish-grantor`
+- View events: `kubectl get events -n wish-system`
+- Describe wish: `kubectl wish describe <wish-name>`
+- GitHub Issues: https://github.com/yourusername/wish-system/issues
