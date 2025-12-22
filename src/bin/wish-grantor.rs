@@ -2,8 +2,8 @@ use anyhow::anyhow;
 use futures::StreamExt;
 use k8s_openapi::api::core::v1::{ConfigMap, Secret};
 use kube::{
-    api::{Api, Patch, PatchParams, ResourceExt},
-    runtime::{controller::Action, watcher::Config, Controller},
+    api::{Api, ListParams, Patch, PatchParams, ResourceExt},
+    runtime::{controller::Action, watcher::Config, watcher, Controller, WatchStreamExt},
     Client, CustomResourceExt,
 };
 use serde_json::json;
@@ -30,6 +30,87 @@ struct Context {
     client: Client,
 }
 
+async fn watch_config_changes(client: Client) -> anyhow::Result<()> {
+    info!("Starting ConfigMap watcher for LLM configuration changes");
+
+    loop {
+        // Watch all wish-grantor-config ConfigMaps across all namespaces
+        let cm_api: Api<ConfigMap> = Api::all(client.clone());
+        let mut stream = watcher(cm_api, Config::default().any_semantic()).applied_objects().boxed();
+
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(cm) => {
+                    let ns = cm.namespace().unwrap_or_else(|| "default".to_string());
+                    info!("ConfigMap wish-grantor-config changed in namespace: {}", ns);
+
+                    // Retry failed wishes in this namespace
+                    if let Err(e) = retry_failed_wishes(&client, &ns).await {
+                        error!("Failed to retry wishes in namespace {}: {}", ns, e);
+                    }
+                }
+                Err(e) => {
+                    error!("ConfigMap watch error: {}", e);
+                    // Wait before retrying
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    break; // Restart the watch
+                }
+            }
+        }
+
+        // If we get here, the stream ended, wait and retry
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    }
+}
+
+async fn retry_failed_wishes(client: &Client, namespace: &str) -> anyhow::Result<()> {
+    let wishes_api: Api<Wish> = Api::namespaced(client.clone(), namespace);
+    let lp = ListParams::default();
+    let wishes = wishes_api.list(&lp).await?;
+
+    let mut retry_count = 0;
+    for wish in wishes.items {
+        // Only retry wishes that failed due to LLM connection issues
+        if let Some(status) = &wish.status {
+            if matches!(status.phase, Some(WishPhase::Failed)) {
+                if let Some(error) = &status.error {
+                    // Check if error is related to LLM connectivity
+                    if error.contains("Connection refused")
+                        || error.contains("connection error")
+                        || error.contains("error sending request") {
+
+                        let name = wish.name_any();
+                        info!("Retrying wish {} after config change", name);
+
+                        // Reset to Requested state to trigger reconciliation
+                        let patch = json!({
+                            "status": {
+                                "phase": "Requested",
+                                "error": null
+                            }
+                        });
+
+                        if let Err(e) = wishes_api
+                            .patch_status(&name, &PatchParams::default(), &Patch::Merge(&patch))
+                            .await
+                        {
+                            warn!("Failed to reset wish {}: {}", name, e);
+                        } else {
+                            retry_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if retry_count > 0 {
+        info!("Reset {} failed wish(es) for retry in namespace {}", retry_count, namespace);
+    }
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -41,6 +122,16 @@ async fn main() -> anyhow::Result<()> {
 
     // Print CRD for installation
     println!("{}", serde_yaml::to_string(&Wish::crd())?);
+
+    // Clone client for config watcher
+    let config_client = client.clone();
+
+    // Spawn config watcher task
+    tokio::spawn(async move {
+        if let Err(e) = watch_config_changes(config_client).await {
+            error!("Config watcher error: {}", e);
+        }
+    });
 
     Controller::new(wishes, Config::default())
         .run(reconcile, error_policy, Arc::new(Context { client }))

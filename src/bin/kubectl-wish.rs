@@ -457,7 +457,7 @@ async fn configure_llm(
 
     println!();
     println!("Configuration updated successfully!");
-    println!("The wish-grantor controller will pick up the changes automatically.");
+    println!("The wish-grantor will automatically retry any failed wishes with connection errors.");
 
     Ok(())
 }
