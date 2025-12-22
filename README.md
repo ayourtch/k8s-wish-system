@@ -37,17 +37,56 @@ Updates Wish status to "Fulfilled"
 - **RBAC Protection**: Separate permissions for planning vs execution
 - **Permission Controls**: Fine-grained control over allowed operations
 - **Kubectl Plugin**: Convenient CLI for wish management
+- **Namespace Separation**: Controllers in wish-system, resources in target namespace
+
+## Quick Start
+
+Get started in under 5 minutes with our interactive installer:
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/wish-system
+cd wish-system
+
+# Run the interactive installer
+./scripts/install.sh
+
+# Create your first wish
+./target/release/kubectl-wish create "Deploy nginx with 3 replicas"
+```
+
+The installer will:
+- ✓ Check prerequisites
+- ✓ Set up your Kubernetes cluster
+- ✓ Auto-detect local LLM services (Ollama, LM Studio)
+- ✓ Guide you through configuration
+
+See [QUICKSTART.md](QUICKSTART.md) for detailed quick start guide.
 
 ## Installation
 
-### Prerequisites
+### Interactive Installation (Recommended)
+
+```bash
+./scripts/install.sh
+```
+
+This is the easiest way to get started. The script will guide you through:
+- Cluster detection or creation
+- Installation method selection
+- LLM configuration with auto-detection
+- Verification
+
+### Manual Installation
+
+#### Prerequisites
 
 - Kubernetes cluster (1.28+)
-- Rust 1.75+
-- Docker (for building images)
 - kubectl
+- Docker (for building images)
+- Rust 1.75+ (optional, for building from source)
 
-### Build
+#### Build
 
 ```bash
 # Build Rust binaries
