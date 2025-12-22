@@ -198,6 +198,34 @@ async fn create_wish(
     Ok(())
 }
 
+async fn resolve_wish_name(client: &Client, namespace: &str, name_or_wish_name: &str) -> Result<String> {
+    let api: Api<Wish> = Api::namespaced(client.clone(), namespace);
+
+    // First, try as resource name
+    if api.get(name_or_wish_name).await.is_ok() {
+        return Ok(name_or_wish_name.to_string());
+    }
+
+    // Not found as resource name, search by wish-name (status.name)
+    let wishes = api.list(&ListParams::default()).await?;
+
+    for wish in wishes.items {
+        if let Some(status) = &wish.status {
+            if let Some(wish_name) = &status.name {
+                if wish_name == name_or_wish_name {
+                    return Ok(wish.name_any());
+                }
+            }
+        }
+    }
+
+    // Not found by either name
+    Err(anyhow::anyhow!(
+        "Wish '{}' not found (searched by resource name and wish-name)",
+        name_or_wish_name
+    ))
+}
+
 async fn list_wishes(client: &Client, namespace: &str) -> Result<()> {
     let api: Api<Wish> = Api::namespaced(client.clone(), namespace);
     let wishes = api.list(&ListParams::default()).await?;
@@ -240,9 +268,12 @@ async fn list_wishes(client: &Client, namespace: &str) -> Result<()> {
     Ok(())
 }
 
-async fn describe_wish(client: &Client, namespace: &str, name: &str) -> Result<()> {
+async fn describe_wish(client: &Client, namespace: &str, name_or_wish_name: &str) -> Result<()> {
+    // Resolve to resource name (supports both resource name and wish-name)
+    let name = resolve_wish_name(client, namespace, name_or_wish_name).await?;
+
     let api: Api<Wish> = Api::namespaced(client.clone(), namespace);
-    let wish = api.get(name).await?;
+    let wish = api.get(&name).await?;
 
     println!("Name:      {}", wish.name_any());
     println!("Namespace: {}", namespace);
@@ -307,19 +338,22 @@ async fn describe_wish(client: &Client, namespace: &str, name: &str) -> Result<(
     Ok(())
 }
 
-async fn fulfill_wish(client: &Client, namespace: &str, name: &str) -> Result<()> {
+async fn fulfill_wish(client: &Client, namespace: &str, name_or_wish_name: &str) -> Result<()> {
+    // Resolve to resource name (supports both resource name and wish-name)
+    let name = resolve_wish_name(client, namespace, name_or_wish_name).await?;
+
     let api: Api<Wish> = Api::namespaced(client.clone(), namespace);
-    
+
     // Get current wish
-    let wish = api.get(name).await?;
-    
+    let wish = api.get(&name).await?;
+
     // Check if already fulfilled
     if let Some(status) = &wish.status {
         if status.fulfilled {
             println!("Wish '{}' is already fulfilled", name);
             return Ok(());
         }
-        
+
         if !matches!(status.phase, Some(wish_system::WishPhase::Granted)) {
             println!("Wish '{}' is not in Granted state (current: {:?})", name, status.phase);
             return Ok(());
@@ -336,7 +370,7 @@ async fn fulfill_wish(client: &Client, namespace: &str, name: &str) -> Result<()
         }
     });
 
-    api.patch(name, &PatchParams::default(), &Patch::Merge(&patch))
+    api.patch(&name, &PatchParams::default(), &Patch::Merge(&patch))
         .await?;
 
     println!("Wish '{}' marked for fulfillment", name);
@@ -345,9 +379,12 @@ async fn fulfill_wish(client: &Client, namespace: &str, name: &str) -> Result<()
     Ok(())
 }
 
-async fn delete_wish(client: &Client, namespace: &str, name: &str) -> Result<()> {
+async fn delete_wish(client: &Client, namespace: &str, name_or_wish_name: &str) -> Result<()> {
+    // Resolve to resource name (supports both resource name and wish-name)
+    let name = resolve_wish_name(client, namespace, name_or_wish_name).await?;
+
     let api: Api<Wish> = Api::namespaced(client.clone(), namespace);
-    api.delete(name, &DeleteParams::default()).await?;
+    api.delete(&name, &DeleteParams::default()).await?;
 
     println!("Wish '{}' deleted", name);
 
