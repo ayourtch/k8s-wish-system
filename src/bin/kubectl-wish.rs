@@ -46,7 +46,11 @@ enum Commands {
     },
 
     /// List all wishes
-    List,
+    List {
+        /// List wishes across all namespaces
+        #[arg(short = 'A', long)]
+        all_namespaces: bool,
+    },
 
     /// Describe a wish
     Describe {
@@ -105,7 +109,13 @@ async fn main() -> Result<()> {
             target_namespace,
         } => create_wish(&client, &namespace, &wish, auto_fulfill, !no_dry_run, name, target_namespace).await?,
 
-        Commands::List => list_wishes(&client, &namespace).await?,
+        Commands::List { all_namespaces } => {
+            if all_namespaces {
+                list_wishes_all_namespaces(&client).await?
+            } else {
+                list_wishes(&client, &namespace).await?
+            }
+        }
 
         Commands::Describe { name } => describe_wish(&client, &namespace, &name).await?,
 
@@ -224,6 +234,49 @@ async fn resolve_wish_name(client: &Client, namespace: &str, name_or_wish_name: 
         "Wish '{}' not found (searched by resource name and wish-name)",
         name_or_wish_name
     ))
+}
+
+async fn list_wishes_all_namespaces(client: &Client) -> Result<()> {
+    let api: Api<Wish> = Api::all(client.clone());
+    let wishes = api.list(&ListParams::default()).await?;
+
+    if wishes.items.is_empty() {
+        println!("No wishes found in any namespace");
+        return Ok(());
+    }
+
+    println!("{:<20} {:<30} {:<15} {:<30} {:<10}", "NAMESPACE", "NAME", "PHASE", "WISH-NAME", "AGE");
+    println!("{}", "-".repeat(110));
+
+    for wish in wishes.items {
+        let namespace = wish.namespace().unwrap_or_else(|| "-".to_string());
+        let name = wish.name_any();
+        let phase = wish
+            .status
+            .as_ref()
+            .and_then(|s| s.phase.as_ref())
+            .map(|p| format!("{:?}", p))
+            .unwrap_or_else(|| "Unknown".to_string());
+        let wish_name = wish
+            .status
+            .as_ref()
+            .and_then(|s| s.name.as_ref())
+            .cloned()
+            .unwrap_or_else(|| "-".to_string());
+        let age = wish
+            .metadata
+            .creation_timestamp
+            .as_ref()
+            .map(|ts| {
+                let duration = chrono::Utc::now().signed_duration_since(ts.0);
+                format_duration(duration)
+            })
+            .unwrap_or_else(|| "-".to_string());
+
+        println!("{:<20} {:<30} {:<15} {:<30} {:<10}", namespace, name, phase, wish_name, age);
+    }
+
+    Ok(())
 }
 
 async fn list_wishes(client: &Client, namespace: &str) -> Result<()> {
