@@ -1,13 +1,14 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use k8s_openapi::api::core::v1::{ConfigMap, Secret};
+use k8s_openapi::api::authentication::v1::SelfSubjectReview;
 use kube::{
     api::{Api, DeleteParams, ListParams, Patch, PatchParams, PostParams},
     Client, ResourceExt,
 };
 use serde_json::json;
 use std::collections::BTreeMap;
-use wish_system::{Wish, WishSpec};
+use wish_system::{CreatorIdentity, Wish, WishSpec};
 
 #[derive(Parser)]
 #[command(name = "kubectl-wish")]
@@ -123,6 +124,31 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+async fn get_current_user(client: &Client) -> Result<CreatorIdentity> {
+    // Use SelfSubjectReview to get current user info
+    let api: Api<SelfSubjectReview> = Api::all(client.clone());
+
+    let review = SelfSubjectReview {
+        metadata: Default::default(),
+        status: None,
+    };
+
+    let result = api.create(&PostParams::default(), &review).await?;
+
+    let user_info = result
+        .status
+        .and_then(|s| s.user_info)
+        .ok_or_else(|| anyhow::anyhow!("Failed to get current user info"))?;
+
+    let username = user_info
+        .username
+        .ok_or_else(|| anyhow::anyhow!("Failed to get current username"))?;
+
+    let groups = user_info.groups.unwrap_or_default();
+
+    Ok(CreatorIdentity { username, groups })
+}
+
 async fn create_wish(
     client: &Client,
     namespace: &str,
@@ -141,6 +167,9 @@ async fn create_wish(
         )
     });
 
+    // Get current user for impersonation
+    let creator = get_current_user(client).await?;
+
     let wish = Wish::new(
         &resource_name,
         WishSpec {
@@ -149,6 +178,7 @@ async fn create_wish(
             dry_run,
             target_namespace,
             llm_config: None,
+            creator: Some(creator.clone()),
         },
     );
 
@@ -156,7 +186,8 @@ async fn create_wish(
 
     println!("Wish created: {}", created.name_any());
     println!("Status: Requested");
-    
+    println!("Creator: {} (groups: {})", creator.username, creator.groups.join(", "));
+
     if dry_run {
         println!("Mode: Dry-run (will not execute automatically)");
         println!("Use 'kubectl wish fulfill {}' to execute after review", resource_name);

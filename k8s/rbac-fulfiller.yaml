@@ -17,23 +17,16 @@ rules:
 - apiGroups: ["wish.ayourt.ch"]
   resources: ["wishes/status"]
   verbs: ["get", "patch", "update"]
-# Broad permissions for fulfilling wishes
-# NOTE: Adjust these based on your security requirements
+# Impersonation permissions - allows wish-fulfiller to execute as the wish creator
 - apiGroups: [""]
-  resources: ["pods", "services", "configmaps", "secrets", "persistentvolumeclaims"]
-  verbs: ["create", "get", "list", "update", "patch", "delete"]
-- apiGroups: ["apps"]
-  resources: ["deployments", "statefulsets", "daemonsets"]
-  verbs: ["create", "get", "list", "update", "patch", "delete"]
-- apiGroups: ["batch"]
-  resources: ["jobs", "cronjobs"]
-  verbs: ["create", "get", "list", "update", "patch", "delete"]
-- apiGroups: ["networking.k8s.io"]
-  resources: ["ingresses", "networkpolicies"]
-  verbs: ["create", "get", "list", "update", "patch", "delete"]
-# Read ConfigMaps for permission config
+  resources: ["users", "groups", "serviceaccounts"]
+  verbs: ["impersonate"]
+# Discovery API access for dynamic resource handling
 - apiGroups: [""]
-  resources: ["configmaps"]
+  resources: ["*"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps", "batch", "networking.k8s.io", "rbac.authorization.k8s.io"]
+  resources: ["*"]
   verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

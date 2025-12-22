@@ -19,11 +19,11 @@ use chrono::{DateTime, Utc};
 pub struct WishSpec {
     /// Natural language wish text
     pub wish: String,
-    
+
     /// Auto-execute after granting
     #[serde(default)]
     pub auto_fulfill: bool,
-    
+
     /// If true, plan but don't execute
     #[serde(default = "default_dry_run")]
     pub dry_run: bool,
@@ -35,6 +35,11 @@ pub struct WishSpec {
     /// Optional LLM configuration override
     #[serde(skip_serializing_if = "Option::is_none")]
     pub llm_config: Option<LlmConfig>,
+
+    /// Creator identity for RBAC impersonation
+    /// This field is set automatically by kubectl-wish
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creator: Option<CreatorIdentity>,
 }
 
 fn default_dry_run() -> bool {
@@ -58,6 +63,15 @@ pub struct LlmConfig {
 pub struct SecretRef {
     pub name: String,
     pub key: String,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatorIdentity {
+    /// Kubernetes username for impersonation
+    pub username: String,
+    /// User groups at creation time (for impersonation)
+    pub groups: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema, Default)]
