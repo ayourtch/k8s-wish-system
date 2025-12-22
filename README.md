@@ -84,7 +84,7 @@ This is the easiest way to get started. The script will guide you through:
 - Kubernetes cluster (1.28+)
 - kubectl
 - Docker (for building images)
-- Rust 1.75+ (optional, for building from source)
+- Recent stable Rust toolchain (optional, for building from source)
 
 #### Build
 

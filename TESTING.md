@@ -6,9 +6,9 @@ Since this project uses Rust with external dependencies, you'll need network acc
 
 ### Build Steps
 
-1. **Ensure you have Rust 1.75+:**
+1. **Ensure you have a recent stable Rust toolchain:**
    ```bash
-   rustup update
+   rustup update stable
    ```
 
 2. **Build the project:**

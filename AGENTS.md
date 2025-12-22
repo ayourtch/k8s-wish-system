@@ -7,7 +7,7 @@ This document provides guidance for LLMs (AI assistants) to effectively develop,
 The Wish System is a Kubernetes operator written in Rust that allows users to express infrastructure desires in natural language. An LLM interprets these wishes and generates kubectl commands/YAML manifests for execution.
 
 **Key Technologies:**
-- Rust 1.75+ (kube-rs ecosystem)
+- Rust (kube-rs ecosystem, recent stable toolchain recommended)
 - Kubernetes Custom Resource Definitions (CRDs)
 - OpenAI-compatible LLM APIs
 - Tokio async runtime
