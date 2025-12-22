@@ -100,9 +100,11 @@ async fn reconcile(wish: Arc<Wish>, ctx: Arc<Context>) -> Result<Action, Reconci
         }
     };
 
-    info!("Executing plan with {} commands", plan.commands.len());
+    // Get target namespace for resource deployment
+    let target_namespace = &wish.spec.target_namespace;
+    info!("Executing plan with {} commands in target namespace: {}", plan.commands.len(), target_namespace);
 
-    match execute_plan(&plan.commands, &namespace, &permissions, &ctx.client).await {
+    match execute_plan(&plan.commands, target_namespace, &permissions, &ctx.client).await {
         Ok(()) => {
             update_status_fulfilled(&ctx.client, &namespace, &name).await?;
             info!("Wish fulfilled successfully");
@@ -260,10 +262,21 @@ async fn execute_kubectl(cmd: &Command, namespace: &str, client: &Client) -> any
     // Use discovery to find the API resource
     let discovery = Discovery::new(client.clone()).run().await?;
 
+    // Parse API group and version
+    // Core API resources have no group (e.g., "v1")
+    // Other resources have group/version (e.g., "apps/v1")
+    let (group, version) = if api_version.contains('/') {
+        let parts: Vec<&str> = api_version.splitn(2, '/').collect();
+        (parts[0].to_string(), parts[1].to_string())
+    } else {
+        // Core API - no group
+        (String::new(), api_version.to_string())
+    };
+
     // Find the API resource for this kind
     let (ar, caps) = discovery.resolve_gvk(&GroupVersionKind {
-        group: api_version.split('/').next().unwrap_or("").to_string(),
-        version: api_version.split('/').last().unwrap_or(api_version).to_string(),
+        group,
+        version,
         kind: kind.to_string(),
     }).ok_or_else(|| anyhow!("Failed to resolve API resource for {}/{}", api_version, kind))?;
 

@@ -38,6 +38,10 @@ enum Commands {
         /// Optional name for the wish resource
         #[arg(long)]
         name: Option<String>,
+
+        /// Target namespace for deployed resources (defaults to "default")
+        #[arg(long, default_value = "default")]
+        target_namespace: String,
     },
 
     /// List all wishes
@@ -97,7 +101,8 @@ async fn main() -> Result<()> {
             auto_fulfill,
             no_dry_run,
             name,
-        } => create_wish(&client, &namespace, &wish, auto_fulfill, !no_dry_run, name).await?,
+            target_namespace,
+        } => create_wish(&client, &namespace, &wish, auto_fulfill, !no_dry_run, name, target_namespace).await?,
 
         Commands::List => list_wishes(&client, &namespace).await?,
 
@@ -125,6 +130,7 @@ async fn create_wish(
     auto_fulfill: bool,
     dry_run: bool,
     name: Option<String>,
+    target_namespace: String,
 ) -> Result<()> {
     let api: Api<Wish> = Api::namespaced(client.clone(), namespace);
 
@@ -141,6 +147,7 @@ async fn create_wish(
             wish: wish_text.to_string(),
             auto_fulfill,
             dry_run,
+            target_namespace,
             llm_config: None,
         },
     );

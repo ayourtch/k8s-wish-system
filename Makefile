@@ -126,3 +126,11 @@ kind-deploy: kind-cluster kind-load-runtime install-all
 	@echo ""
 	@echo "Wish system deployed successfully!"
 	@echo "Check status with: kubectl get pods -n wish-system"
+
+# Rebuild and redeploy to existing kind cluster
+kind-rebuild-redeploy: build-runtime kind-load-runtime
+	kubectl -n wish-system rollout restart deployment wish-grantor wish-fulfiller
+	@echo "Waiting for controllers to restart..."
+	kubectl wait --for=condition=available --timeout=60s deployment/wish-grantor -n wish-system || true
+	kubectl wait --for=condition=available --timeout=60s deployment/wish-fulfiller -n wish-system || true
+	@echo "Controllers redeployed successfully!"

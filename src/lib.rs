@@ -27,7 +27,11 @@ pub struct WishSpec {
     /// If true, plan but don't execute
     #[serde(default = "default_dry_run")]
     pub dry_run: bool,
-    
+
+    /// Target namespace for deployed resources (defaults to "default")
+    #[serde(default = "default_target_namespace")]
+    pub target_namespace: String,
+
     /// Optional LLM configuration override
     #[serde(skip_serializing_if = "Option::is_none")]
     pub llm_config: Option<LlmConfig>,
@@ -35,6 +39,10 @@ pub struct WishSpec {
 
 fn default_dry_run() -> bool {
     true
+}
+
+fn default_target_namespace() -> String {
+    "default".to_string()
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]
