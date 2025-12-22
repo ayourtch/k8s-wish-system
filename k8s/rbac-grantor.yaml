@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: wish-grantor
-  namespace: default
+  namespace: wish-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -11,10 +11,10 @@ metadata:
   name: wish-grantor-role
 rules:
 # Wish CRD access
-- apiGroups: ["magic.k8s.io"]
+- apiGroups: ["wish.ayourt.ch"]
   resources: ["wishes"]
   verbs: ["get", "list", "watch"]
-- apiGroups: ["magic.k8s.io"]
+- apiGroups: ["wish.ayourt.ch"]
   resources: ["wishes/status"]
   verbs: ["get", "patch", "update"]
 # Read k8s API schema
@@ -36,7 +36,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: wish-grantor
-  namespace: default
+  namespace: wish-system
 roleRef:
   kind: ClusterRole
   name: wish-grantor-role

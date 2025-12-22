@@ -1,0 +1,255 @@
+# Wish System - All-in-One Installation Manifest
+# This file installs the complete wish-system in the wish-system namespace
+#
+# Installation:
+#   kubectl apply -f https://raw.githubusercontent.com/YOUR_USERNAME/wish-system/main/k8s/install.yaml
+#
+# Or locally:
+#   kubectl apply -f k8s/install.yaml
+#
+# To uninstall:
+#   kubectl delete -f k8s/install.yaml
+#
+# ============================================================================
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wish-system
+  labels:
+    app.kubernetes.io/name: wish-system
+    app.kubernetes.io/component: operator
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: wishes.wish.ayourt.ch
+spec:
+  group: wish.ayourt.ch
+  names:
+    kind: Wish
+    plural: wishes
+    singular: wish
+    shortNames:
+    - wsh
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            required:
+            - wish
+            properties:
+              wish:
+                type: string
+                description: "Natural language wish"
+              autoFulfill:
+                type: boolean
+                default: false
+                description: "Auto-execute after granting"
+              dryRun:
+                type: boolean
+                default: true
+                description: "If true, plan but don't execute"
+              llmConfig:
+                type: object
+                properties:
+                  endpoint:
+                    type: string
+                  model:
+                    type: string
+                  credentialsSecretRef:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      key:
+                        type: string
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+                enum: [Requested, Granted, Fulfilled, Failed]
+              name:
+                type: string
+                description: "LLM-assigned semantic name"
+              plan:
+                type: object
+                properties:
+                  commands:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum: [kubectl, shell]
+                        command:
+                          type: string
+                        yaml:
+                          type: string
+                  reasoning:
+                    type: string
+              dryRunResults:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    command:
+                      type: string
+                    expectedOutcome:
+                      type: string
+              fulfilled:
+                type: boolean
+                description: "Immutable once true"
+              fulfilledAt:
+                type: string
+                format: date-time
+              error:
+                type: string
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Name
+      type: string
+      jsonPath: .status.name
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+---
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wish-grantor
+  namespace: wish-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wish-grantor-role
+rules:
+# Wish CRD access
+- apiGroups: ["wish.ayourt.ch"]
+  resources: ["wishes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["wish.ayourt.ch"]
+  resources: ["wishes/status"]
+  verbs: ["get", "patch", "update"]
+# Read k8s API schema
+- apiGroups: [""]
+  resources: ["*"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps", "batch", "networking.k8s.io", "rbac.authorization.k8s.io"]
+  resources: ["*"]
+  verbs: ["get", "list"]
+# Read ConfigMaps and Secrets for config
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wish-grantor-binding
+subjects:
+- kind: ServiceAccount
+  name: wish-grantor
+  namespace: wish-system
+roleRef:
+  kind: ClusterRole
+  name: wish-grantor-role
+  apiGroup: rbac.authorization.k8s.io
+---
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wish-fulfiller
+  namespace: wish-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wish-fulfiller-role
+rules:
+# Wish CRD access
+- apiGroups: ["wish.ayourt.ch"]
+  resources: ["wishes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["wish.ayourt.ch"]
+  resources: ["wishes/status"]
+  verbs: ["get", "patch", "update"]
+# Broad permissions for fulfilling wishes
+# NOTE: Adjust these based on your security requirements
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets", "persistentvolumeclaims"]
+  verbs: ["create", "get", "list", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets"]
+  verbs: ["create", "get", "list", "update", "patch", "delete"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["create", "get", "list", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["create", "get", "list", "update", "patch", "delete"]
+# Read ConfigMaps for permission config
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wish-fulfiller-binding
+subjects:
+- kind: ServiceAccount
+  name: wish-fulfiller
+  namespace: wish-system
+roleRef:
+  kind: ClusterRole
+  name: wish-fulfiller-role
+  apiGroup: rbac.authorization.k8s.io
+---
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wish-grantor-config
+  namespace: wish-system
+data:
+  llmEndpoint: "http://localhost:11434/v1"
+  llmModel: "llama3.2:latest"
+  # Optional: reference to credentials secret
+  # credentialsSecretName: "llm-credentials"
+  # credentialsSecretKey: "apiKey"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wish-fulfiller-permissions
+  namespace: wish-system
+data:
+  allowedNamespaces: "default,staging"
+  allowedResources: "pods,deployments,services,configmaps,secrets"
+  forbiddenOperations: "delete:namespaces,delete:persistentvolumes"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: llm-credentials
+  namespace: wish-system
+type: Opaque
+stringData:
+  apiKey: ""  # Add your API key here if using a remote LLM

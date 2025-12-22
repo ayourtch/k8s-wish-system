@@ -1,0 +1,27 @@
+# Multi-stage build for wish-system runtime
+# This Dockerfile builds a single image containing both controllers
+
+FROM rust:1.83-bookworm as builder
+
+WORKDIR /build
+
+# Copy source code
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+# Build both binaries in release mode
+RUN cargo build --release --bins
+
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy both controller binaries
+COPY --from=builder /build/target/release/wish-grantor /usr/local/bin/wish-grantor
+COPY --from=builder /build/target/release/wish-fulfiller /usr/local/bin/wish-fulfiller
+
+# Default to wish-grantor, but can be overridden
+ENTRYPOINT ["/usr/local/bin/wish-grantor"]

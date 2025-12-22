@@ -1,4 +1,6 @@
 ---
+# Deployments using the unified wish-system-runtime image
+# Both controllers use the same image but different entry points
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,8 +19,9 @@ spec:
       serviceAccountName: wish-grantor
       containers:
       - name: controller
-        image: wish-grantor:latest
-        imagePullPolicy: Never  # For local development
+        image: wish-system-runtime:latest
+        command: ["/usr/local/bin/wish-grantor"]
+        imagePullPolicy: IfNotPresent
         env:
         - name: RUST_LOG
           value: "info"
@@ -48,8 +51,9 @@ spec:
       serviceAccountName: wish-fulfiller
       containers:
       - name: controller
-        image: wish-fulfiller:latest
-        imagePullPolicy: Never  # For local development
+        image: wish-system-runtime:latest
+        command: ["/usr/local/bin/wish-fulfiller"]
+        imagePullPolicy: IfNotPresent
         env:
         - name: RUST_LOG
           value: "info"

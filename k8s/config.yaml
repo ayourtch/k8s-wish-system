@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: wish-grantor-config
-  namespace: default
+  namespace: wish-system
 data:
   llmEndpoint: "http://localhost:11434/v1"
   llmModel: "llama3.2:latest"
@@ -15,7 +15,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: wish-fulfiller-permissions
-  namespace: default
+  namespace: wish-system
 data:
   allowedNamespaces: "default,staging"
   allowedResources: "pods,deployments,services,configmaps,secrets"
@@ -25,7 +25,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: llm-credentials
-  namespace: default
+  namespace: wish-system
 type: Opaque
 stringData:
   apiKey: ""  # Add your API key here if using a remote LLM

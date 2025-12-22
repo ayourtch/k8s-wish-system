@@ -1,0 +1,115 @@
+---
+# Bootstrap Builder - Builds controller images inside the cluster using kaniko
+# This eliminates the need for an external container registry
+#
+# Prerequisites:
+# 1. Create a ConfigMap with the source code
+# 2. Run this Job to build images
+# 3. Images are stored in the local containerd registry
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: builder
+  namespace: wish-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: builder-role
+  namespace: wish-system
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: builder-binding
+  namespace: wish-system
+subjects:
+- kind: ServiceAccount
+  name: builder
+  namespace: wish-system
+roleRef:
+  kind: Role
+  name: builder-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Job to build wish-grantor image using kaniko
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: build-wish-grantor
+  namespace: wish-system
+spec:
+  template:
+    metadata:
+      labels:
+        app: wish-builder
+        component: grantor
+    spec:
+      serviceAccountName: builder
+      restartPolicy: Never
+      containers:
+      - name: kaniko
+        image: gcr.io/kaniko-project/executor:latest
+        args:
+        - "--dockerfile=/workspace/Dockerfile"
+        - "--context=/workspace"
+        - "--build-arg=BINARY_NAME=wish-grantor"
+        - "--destination=wish-grantor:latest"
+        - "--no-push"
+        - "--tarPath=/workspace/wish-grantor.tar"
+        volumeMounts:
+        - name: source-code
+          mountPath: /workspace
+        - name: docker-config
+          mountPath: /kaniko/.docker
+      volumes:
+      - name: source-code
+        configMap:
+          name: wish-source-code
+      - name: docker-config
+        emptyDir: {}
+---
+# Job to build wish-fulfiller image using kaniko
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: build-wish-fulfiller
+  namespace: wish-system
+spec:
+  template:
+    metadata:
+      labels:
+        app: wish-builder
+        component: fulfiller
+    spec:
+      serviceAccountName: builder
+      restartPolicy: Never
+      containers:
+      - name: kaniko
+        image: gcr.io/kaniko-project/executor:latest
+        args:
+        - "--dockerfile=/workspace/Dockerfile"
+        - "--context=/workspace"
+        - "--build-arg=BINARY_NAME=wish-fulfiller"
+        - "--destination=wish-fulfiller:latest"
+        - "--no-push"
+        - "--tarPath=/workspace/wish-fulfiller.tar"
+        volumeMounts:
+        - name: source-code
+          mountPath: /workspace
+        - name: docker-config
+          mountPath: /kaniko/.docker
+      volumes:
+      - name: source-code
+        configMap:
+          name: wish-source-code
+      - name: docker-config
+        emptyDir: {}

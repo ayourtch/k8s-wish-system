@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: wish-fulfiller
-  namespace: default
+  namespace: wish-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -11,10 +11,10 @@ metadata:
   name: wish-fulfiller-role
 rules:
 # Wish CRD access
-- apiGroups: ["magic.k8s.io"]
+- apiGroups: ["wish.ayourt.ch"]
   resources: ["wishes"]
   verbs: ["get", "list", "watch"]
-- apiGroups: ["magic.k8s.io"]
+- apiGroups: ["wish.ayourt.ch"]
   resources: ["wishes/status"]
   verbs: ["get", "patch", "update"]
 # Broad permissions for fulfilling wishes
@@ -43,7 +43,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: wish-fulfiller
-  namespace: default
+  namespace: wish-system
 roleRef:
   kind: ClusterRole
   name: wish-fulfiller-role

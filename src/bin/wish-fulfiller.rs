@@ -3,7 +3,9 @@ use chrono::Utc;
 use futures::StreamExt;
 use k8s_openapi::api::core::v1::ConfigMap;
 use kube::{
-    api::{Api, Patch, PatchParams, ResourceExt},
+    api::{Api, Patch, PatchParams, ResourceExt, DynamicObject},
+    core::GroupVersionKind,
+    discovery::{Discovery, Scope},
     runtime::{controller::Action, watcher::Config, Controller},
     Client,
 };
@@ -100,7 +102,7 @@ async fn reconcile(wish: Arc<Wish>, ctx: Arc<Context>) -> Result<Action, Reconci
 
     info!("Executing plan with {} commands", plan.commands.len());
 
-    match execute_plan(&plan.commands, &namespace, &permissions).await {
+    match execute_plan(&plan.commands, &namespace, &permissions, &ctx.client).await {
         Ok(()) => {
             update_status_fulfilled(&ctx.client, &namespace, &name).await?;
             info!("Wish fulfilled successfully");
@@ -175,6 +177,7 @@ async fn execute_plan(
     commands: &[Command],
     namespace: &str,
     permissions: &PermissionConfig,
+    client: &Client,
 ) -> anyhow::Result<()> {
     for (i, cmd) in commands.iter().enumerate() {
         info!("Executing command {}/{}: {:?}", i + 1, commands.len(), cmd.command_type);
@@ -183,7 +186,7 @@ async fn execute_plan(
         validate_command(cmd, namespace, permissions)?;
 
         match &cmd.command_type {
-            CommandType::Kubectl => execute_kubectl(cmd, namespace).await?,
+            CommandType::Kubectl => execute_kubectl(cmd, namespace, client).await?,
             CommandType::Shell => execute_shell(cmd).await?,
         }
     }
@@ -227,51 +230,56 @@ fn validate_command(
     Ok(())
 }
 
-async fn execute_kubectl(cmd: &Command, namespace: &str) -> anyhow::Result<()> {
-    let mut args: Vec<&str> = cmd.command.split_whitespace().collect();
-    
-    // Remove 'kubectl' if present
-    if args.first() == Some(&"kubectl") {
-        args.remove(0);
+async fn execute_kubectl(cmd: &Command, namespace: &str, client: &Client) -> anyhow::Result<()> {
+    let yaml_content = cmd.yaml.as_ref()
+        .ok_or_else(|| anyhow!("No YAML content provided for kubectl command"))?;
+
+    info!("Applying Kubernetes resource via API");
+
+    // Parse YAML into a dynamic object
+    let value: serde_yaml::Value = serde_yaml::from_str(yaml_content)?;
+    let json_value = serde_json::to_value(value)?;
+
+    let mut obj: DynamicObject = serde_json::from_value(json_value)?;
+
+    // Set namespace if not already set and object is namespaced
+    if obj.metadata.namespace.is_none() {
+        obj.metadata.namespace = Some(namespace.to_string());
     }
 
-    // Add namespace if not present
-    if !args.contains(&"-n") && !args.contains(&"--namespace") {
-        args.push("-n");
-        args.push(namespace);
-    }
+    // Extract API information from the object
+    let api_version = obj.types.as_ref()
+        .map(|t| t.api_version.as_str())
+        .ok_or_else(|| anyhow!("No apiVersion in resource"))?;
+    let kind = obj.types.as_ref()
+        .map(|t| t.kind.as_str())
+        .ok_or_else(|| anyhow!("No kind in resource"))?;
 
-    let output = if let Some(yaml) = &cmd.yaml {
-        // Pipe YAML to kubectl
-        ProcessCommand::new("kubectl")
-            .args(&args)
-            .arg("--dry-run=client")
-            .arg("-o")
-            .arg("yaml")
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .and_then(|mut child| {
-                use std::io::Write;
-                if let Some(mut stdin) = child.stdin.take() {
-                    stdin.write_all(yaml.as_bytes())?;
-                }
-                child.wait_with_output()
-            })?
+    info!("Applying {} {} in namespace {}", kind, obj.name_any(), namespace);
+
+    // Use discovery to find the API resource
+    let discovery = Discovery::new(client.clone()).run().await?;
+
+    // Find the API resource for this kind
+    let (ar, caps) = discovery.resolve_gvk(&GroupVersionKind {
+        group: api_version.split('/').next().unwrap_or("").to_string(),
+        version: api_version.split('/').last().unwrap_or(api_version).to_string(),
+        kind: kind.to_string(),
+    }).ok_or_else(|| anyhow!("Failed to resolve API resource for {}/{}", api_version, kind))?;
+
+    // Create the appropriate API client
+    let api: Api<DynamicObject> = if caps.scope == Scope::Namespaced {
+        Api::namespaced_with(client.clone(), namespace, &ar)
     } else {
-        ProcessCommand::new("kubectl")
-            .args(&args)
-            .output()?
+        Api::all_with(client.clone(), &ar)
     };
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow!("kubectl command failed: {}", stderr));
-    }
+    // Apply the resource (server-side apply)
+    let pp = PatchParams::apply("wish-fulfiller").force();
+    let patch = Patch::Apply(&obj);
+    let result = api.patch(&obj.name_any(), &pp, &patch).await?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    info!("kubectl output: {}", stdout);
+    info!("Successfully applied {} {}", kind, result.name_any());
 
     Ok(())
 }
