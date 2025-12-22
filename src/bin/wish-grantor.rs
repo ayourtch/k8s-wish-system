@@ -158,9 +158,9 @@ async fn reconcile(wish: Arc<Wish>, ctx: Arc<Context>) -> Result<Action, Reconci
         }
     }
 
-    // Load LLM configuration
-    let llm_config = match load_llm_config(&ctx.client, &namespace, &wish).await {
-        Ok(config) => config,
+    // Load LLM configuration (returns config and the namespace it was loaded from)
+    let (llm_config, config_namespace) = match load_llm_config(&ctx.client, &namespace, &wish).await {
+        Ok(result) => result,
         Err(e) => {
             error!("Failed to load LLM config: {}", e);
             update_status_failed(&ctx.client, &namespace, &name, &e.to_string()).await?;
@@ -168,12 +168,12 @@ async fn reconcile(wish: Arc<Wish>, ctx: Arc<Context>) -> Result<Action, Reconci
         }
     };
 
-    // Get API key if needed
+    // Get API key if needed (from the same namespace as the config)
     let api_key = if let Some(ref secret_ref) = llm_config.credentials_secret_ref {
-        match get_secret_value(&ctx.client, &namespace, &secret_ref.name, &secret_ref.key).await {
+        match get_secret_value(&ctx.client, &config_namespace, &secret_ref.name, &secret_ref.key).await {
             Ok(key) => Some(key),
             Err(e) => {
-                warn!("Failed to get API key: {}, proceeding without auth", e);
+                warn!("Failed to get API key from namespace {}: {}, proceeding without auth", config_namespace, e);
                 None
             }
         }
@@ -209,48 +209,109 @@ fn error_policy(_wish: Arc<Wish>, error: &ReconcileError, _ctx: Arc<Context>) ->
     Action::requeue(Duration::from_secs(60))
 }
 
-async fn load_llm_config(client: &Client, namespace: &str, wish: &Wish) -> anyhow::Result<LlmConfig> {
-    // Priority: wish spec > configmap > env vars
+async fn load_llm_config(client: &Client, namespace: &str, wish: &Wish) -> anyhow::Result<(LlmConfig, String)> {
+    // Priority: wish spec > namespace override (if allowed) > wish-system default > env vars
+    // Returns: (LlmConfig, namespace where config was loaded from)
+
+    // 1. Check wish spec first (highest priority)
     if let Some(config) = &wish.spec.llm_config {
-        return Ok(config.clone());
+        info!("Using LLM config from wish spec");
+        return Ok((config.clone(), namespace.to_string()));
     }
 
-    // Try to load from ConfigMap
-    let cm_api: Api<ConfigMap> = Api::namespaced(client.clone(), namespace);
-    if let Ok(cm) = cm_api.get("wish-grantor-config").await {
-        if let Some(data) = cm.data {
-            let endpoint = data
-                .get("llmEndpoint")
-                .ok_or_else(|| anyhow!("llmEndpoint not found in ConfigMap"))?;
-            let model = data
-                .get("llmModel")
-                .ok_or_else(|| anyhow!("llmModel not found in ConfigMap"))?;
+    // 2. Load base config from wish-system namespace
+    let system_cm_api: Api<ConfigMap> = Api::namespaced(client.clone(), "wish-system");
+    let (base_config, allow_override) = match system_cm_api.get("wish-grantor-config").await {
+        Ok(cm) => {
+            if let Some(data) = cm.data {
+                let endpoint = data
+                    .get("llmEndpoint")
+                    .ok_or_else(|| anyhow!("llmEndpoint not found in wish-system ConfigMap"))?;
+                let model = data
+                    .get("llmModel")
+                    .ok_or_else(|| anyhow!("llmModel not found in wish-system ConfigMap"))?;
 
-            let credentials_secret_ref = data.get("credentialsSecretName").map(|name| {
-                wish_system::SecretRef {
-                    name: name.clone(),
-                    key: data
-                        .get("credentialsSecretKey")
-                        .cloned()
-                        .unwrap_or_else(|| "apiKey".to_string()),
+                let credentials_secret_ref = data.get("credentialsSecretName").map(|name| {
+                    wish_system::SecretRef {
+                        name: name.clone(),
+                        key: data
+                            .get("credentialsSecretKey")
+                            .cloned()
+                            .unwrap_or_else(|| "apiKey".to_string()),
+                    }
+                });
+
+                let config = LlmConfig {
+                    endpoint: endpoint.clone(),
+                    model: model.clone(),
+                    credentials_secret_ref,
+                };
+
+                // Check if namespace overrides are allowed
+                let allow = data
+                    .get("allowNamespaceOverride")
+                    .map(|v| v.to_lowercase() == "true")
+                    .unwrap_or(false);
+
+                info!("Loaded base config from wish-system namespace (allowNamespaceOverride: {})", allow);
+                (Some(config), allow)
+            } else {
+                (None, false)
+            }
+        }
+        Err(e) => {
+            warn!("Failed to load config from wish-system namespace: {}", e);
+            (None, false)
+        }
+    };
+
+    // 3. Try namespace override if allowed and namespace is not wish-system
+    if allow_override && namespace != "wish-system" {
+        let ns_cm_api: Api<ConfigMap> = Api::namespaced(client.clone(), namespace);
+        if let Ok(cm) = ns_cm_api.get("wish-grantor-config").await {
+            if let Some(data) = cm.data {
+                if let (Some(endpoint), Some(model)) = (data.get("llmEndpoint"), data.get("llmModel")) {
+                    let credentials_secret_ref = data.get("credentialsSecretName").map(|name| {
+                        wish_system::SecretRef {
+                            name: name.clone(),
+                            key: data
+                                .get("credentialsSecretKey")
+                                .cloned()
+                                .unwrap_or_else(|| "apiKey".to_string()),
+                        }
+                    });
+
+                    info!("Using namespace override config from namespace: {}", namespace);
+                    return Ok((
+                        LlmConfig {
+                            endpoint: endpoint.clone(),
+                            model: model.clone(),
+                            credentials_secret_ref,
+                        },
+                        namespace.to_string(),
+                    ));
                 }
-            });
-
-            return Ok(LlmConfig {
-                endpoint: endpoint.clone(),
-                model: model.clone(),
-                credentials_secret_ref,
-            });
+            }
         }
     }
 
-    // Fallback to env vars
-    Ok(LlmConfig {
-        endpoint: std::env::var("LLM_ENDPOINT")
-            .unwrap_or_else(|_| "http://localhost:11434/v1".to_string()),
-        model: std::env::var("LLM_MODEL").unwrap_or_else(|_| "llama3.2:latest".to_string()),
-        credentials_secret_ref: None,
-    })
+    // 4. Use base config if available
+    if let Some(config) = base_config {
+        info!("Using base config from wish-system namespace");
+        return Ok((config, "wish-system".to_string()));
+    }
+
+    // 5. Fallback to env vars
+    info!("Using LLM config from environment variables");
+    Ok((
+        LlmConfig {
+            endpoint: std::env::var("LLM_ENDPOINT")
+                .unwrap_or_else(|_| "http://localhost:11434/v1".to_string()),
+            model: std::env::var("LLM_MODEL").unwrap_or_else(|_| "llama3.2:latest".to_string()),
+            credentials_secret_ref: None,
+        },
+        namespace.to_string(),
+    ))
 }
 
 async fn get_secret_value(

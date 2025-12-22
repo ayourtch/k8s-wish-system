@@ -10,6 +10,10 @@ data:
   # Optional: reference to credentials secret
   # credentialsSecretName: "llm-credentials"
   # credentialsSecretKey: "apiKey"
+  # Optional: allow per-namespace LLM config overrides
+  # Set to "true" to allow namespaces to override LLM settings
+  # Default: "false" (only wish-system config is used)
+  # allowNamespaceOverride: "false"
 ---
 apiVersion: v1
 kind: ConfigMap
