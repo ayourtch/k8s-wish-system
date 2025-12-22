@@ -1,10 +1,12 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use k8s_openapi::api::core::v1::{ConfigMap, Secret};
 use kube::{
     api::{Api, DeleteParams, ListParams, Patch, PatchParams, PostParams},
     Client, ResourceExt,
 };
 use serde_json::json;
+use std::collections::BTreeMap;
 use wish_system::{Wish, WishSpec};
 
 #[derive(Parser)]
@@ -58,6 +60,25 @@ enum Commands {
         /// Name of the wish
         name: String,
     },
+
+    /// Configure LLM settings
+    Configure {
+        /// LLM endpoint URL (e.g., http://localhost:11434/v1 for Ollama)
+        #[arg(long)]
+        endpoint: Option<String>,
+
+        /// LLM model name (e.g., llama3.2:latest)
+        #[arg(long)]
+        model: Option<String>,
+
+        /// API key for remote LLM services
+        #[arg(long)]
+        api_key: Option<String>,
+
+        /// Show current configuration
+        #[arg(long)]
+        show: bool,
+    },
 }
 
 #[tokio::main]
@@ -85,6 +106,13 @@ async fn main() -> Result<()> {
         Commands::Fulfill { name } => fulfill_wish(&client, &namespace, &name).await?,
 
         Commands::Delete { name } => delete_wish(&client, &namespace, &name).await?,
+
+        Commands::Configure {
+            endpoint,
+            model,
+            api_key,
+            show,
+        } => configure_llm(&client, &namespace, endpoint, model, api_key, show).await?,
     }
 
     Ok(())
@@ -284,6 +312,145 @@ async fn delete_wish(client: &Client, namespace: &str, name: &str) -> Result<()>
     api.delete(name, &DeleteParams::default()).await?;
 
     println!("Wish '{}' deleted", name);
+
+    Ok(())
+}
+
+async fn configure_llm(
+    client: &Client,
+    namespace: &str,
+    endpoint: Option<String>,
+    model: Option<String>,
+    api_key: Option<String>,
+    show: bool,
+) -> Result<()> {
+    let cm_api: Api<ConfigMap> = Api::namespaced(client.clone(), namespace);
+    let secret_api: Api<Secret> = Api::namespaced(client.clone(), namespace);
+
+    if show {
+        // Show current configuration
+        match cm_api.get("wish-grantor-config").await {
+            Ok(cm) => {
+                println!("Current LLM Configuration (namespace: {}):", namespace);
+                println!();
+                if let Some(data) = cm.data {
+                    println!("  Endpoint: {}", data.get("llmEndpoint").unwrap_or(&"-".to_string()));
+                    println!("  Model:    {}", data.get("llmModel").unwrap_or(&"-".to_string()));
+
+                    if let Some(secret_name) = data.get("credentialsSecretName") {
+                        println!("  API Key:  (stored in secret '{}')", secret_name);
+                    } else {
+                        println!("  API Key:  (not configured)");
+                    }
+                } else {
+                    println!("  No configuration found");
+                }
+            }
+            Err(_) => {
+                println!("No LLM configuration found in namespace '{}'", namespace);
+                println!("Use 'kubectl wish configure' to set it up.");
+            }
+        }
+        return Ok(());
+    }
+
+    // Update configuration
+    let mut changes = Vec::new();
+    let mut data = BTreeMap::new();
+
+    // Get existing config first
+    if let Ok(existing_cm) = cm_api.get("wish-grantor-config").await {
+        if let Some(existing_data) = existing_cm.data {
+            data = existing_data;
+        }
+    }
+
+    if let Some(ep) = endpoint {
+        data.insert("llmEndpoint".to_string(), ep.clone());
+        changes.push(format!("endpoint = {}", ep));
+    }
+
+    if let Some(mdl) = model {
+        data.insert("llmModel".to_string(), mdl.clone());
+        changes.push(format!("model = {}", mdl));
+    }
+
+    if changes.is_empty() && api_key.is_none() {
+        println!("No changes specified. Use --help to see available options.");
+        return Ok(());
+    }
+
+    // Update ConfigMap
+    if !changes.is_empty() {
+        let cm = ConfigMap {
+            metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                name: Some("wish-grantor-config".to_string()),
+                namespace: Some(namespace.to_string()),
+                ..Default::default()
+            },
+            data: Some(data),
+            ..Default::default()
+        };
+
+        let pp = PatchParams::apply("kubectl-wish").force();
+        let patch = Patch::Apply(&cm);
+        cm_api.patch("wish-grantor-config", &pp, &patch).await?;
+
+        println!("✓ Updated LLM configuration:");
+        for change in &changes {
+            println!("  - {}", change);
+        }
+    }
+
+    // Update API key if provided
+    if let Some(key) = api_key {
+        let mut secret_data = BTreeMap::new();
+        secret_data.insert("apiKey".to_string(), k8s_openapi::ByteString(key.as_bytes().to_vec()));
+
+        let secret = Secret {
+            metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                name: Some("llm-credentials".to_string()),
+                namespace: Some(namespace.to_string()),
+                ..Default::default()
+            },
+            data: Some(secret_data),
+            ..Default::default()
+        };
+
+        let pp = PatchParams::apply("kubectl-wish");
+        let patch = Patch::Apply(&secret);
+        secret_api.patch("llm-credentials", &pp, &patch).await?;
+
+        println!("✓ Updated API key in secret 'llm-credentials'");
+
+        // Update ConfigMap to reference the secret
+        let mut cm_data = BTreeMap::new();
+        if let Ok(existing_cm) = cm_api.get("wish-grantor-config").await {
+            if let Some(existing_data) = existing_cm.data {
+                cm_data = existing_data;
+            }
+        }
+        cm_data.insert("credentialsSecretName".to_string(), "llm-credentials".to_string());
+        cm_data.insert("credentialsSecretKey".to_string(), "apiKey".to_string());
+
+        let cm = ConfigMap {
+            metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
+                name: Some("wish-grantor-config".to_string()),
+                namespace: Some(namespace.to_string()),
+                ..Default::default()
+            },
+            data: Some(cm_data),
+            ..Default::default()
+        };
+
+        let pp = PatchParams::apply("kubectl-wish").force();
+        let patch = Patch::Apply(&cm);
+        cm_api.patch("wish-grantor-config", &pp, &patch).await?;
+    }
+
+    println!();
+    println!("Configuration updated successfully!");
+    println!("The wish-grantor controller will pick up the changes automatically.");
 
     Ok(())
 }
