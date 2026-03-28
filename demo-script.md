@@ -24,7 +24,7 @@ All three repos are checked out under the same parent directory:
 
 - **Run commands**: Launch a PTY with `tttt_pty_launch`, send commands with `tttt_pty_send_keys`, read output with `tttt_pty_get_screen` / `tttt_pty_get_scrollback`
 - **Sidebar commentary**: Use `tttt_sidebar_message` -- the sidebar is ~28 characters wide but you can stack multiple messages (they appear one above the other). Use this creatively! Send multiple short messages to build up a thought. Clear old ones when moving to a new topic.
-- **Wait for output**: Use `tttt_pty_wait_for_idle` (poll-based) rather than `tttt_pty_wait_for` (blocking)
+- **Wait for output**: Use `tttt_pty_wait_for_idle` (poll-based) rather than `tttt_pty_wait_for` (blocking). **Important**: apchat has a status line with a running clock that prevents idle detection. When waiting on the apchat PTY, always use `ignore_pattern` to exclude the timestamp, e.g.: `tttt_pty_wait_for_idle(session_id, idle_seconds=30, ignore_pattern="\\d{2}:\\d{2}:\\d{2}")`
 - **Send keys**: Send the command text and `[ENTER]` as separate calls
 
 ## Pacing
