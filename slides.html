@@ -242,17 +242,51 @@
     <p class="subtitle">Can we use LLMs to avoid writing YAML?</p>
     <p class="subtitle" style="margin-top:0.5em">Two approaches: single-shot vs. agentic</p>
     <p class="bio">
-      Andrew Yourtchenko<br>
-      <span class="dim">25 years at Cisco &bull; TAC Security &bull; IPv6 &bull; High-performance networking</span><br>
-      <span class="dim">Now: open source agentic AI tools &bull; Coauthor of DHCPv6 RFC &bull; 4 US patents</span>
+      Andrew Yourtchenko &bull; <span class="blue">ayourtch@gmail.com</span>
     </p>
   </div>
 </div>
 
-<!-- Slide 2: The three repos -->
+<!-- Slide 2: Bio -->
 <div class="slide" id="s2">
-  <h2>Three open source projects</h2>
-  <div class="repos">
+  <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <h2>About me</h2>
+    <p style="font-size:1.4em; margin-bottom:0.5em">25 years at Cisco across three lives:</p>
+    <div class="arrow-flow">
+      <div class="step"><span class="highlight">TAC Security</span></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step"><span class="highlight">IPv6</span><br><span class="dim" style="font-size:0.7em">DHCPv6 RFC coauthor</span></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step"><span class="highlight">High-performance<br>networking</span><br><span class="dim" style="font-size:0.7em">4 US patents</span></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step" style="border-color:#38bdf8"><span class="blue">AI + K8s</span><br><span class="dim" style="font-size:0.7em">open source agentic tools</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 3: The question -->
+<div class="slide" id="s3">
+  <div style="text-align:center; flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <h1 style="font-size:2.5em; line-height:1.4">
+      When you hear <span class="blue">Kubernetes</span>,<br>
+      what's the first word<br>
+      that comes to mind?
+    </h1>
+  </div>
+</div>
+
+<!-- Slide 4: YAML -->
+<div class="slide" id="s4">
+  <div style="text-align:center; flex:1; display:flex; flex-direction:column; justify-content:center;">
+    <h1 style="font-size:8em; color:#fbbf24">YAML</h1>
+    <p class="dim" style="font-size:1.3em; margin-top:0.5em">...can we make it go away?</p>
+  </div>
+</div>
+
+<!-- Slide 5: The two projects -->
+<div class="slide" id="s5">
+  <h2>Two open source projects</h2>
+  <div class="repos" style="grid-template-columns: 1fr 1fr;">
     <div class="repo-card">
       <h3>k8s-wish-system</h3>
       <span class="tag k8s">K8s operator</span> <span class="tag llm">single-shot LLM</span> <span class="tag rust">Rust</span>
@@ -265,17 +299,11 @@
       <p style="margin-top:0.5em">Claude Code-like assistant<br>67+ tools, multi-provider</p>
       <p class="url">github.com/ayourtch-llm/apchat</p>
     </div>
-    <div class="repo-card">
-      <h3>tttt</h3>
-      <span class="tag mcp">MCP</span> <span class="tag rust">Rust</span>
-      <p style="margin-top:0.5em">Terminal multiplexer<br>where AI is in control</p>
-      <p class="url">github.com/ayourtch-llm/tttt</p>
-    </div>
   </div>
 </div>
 
-<!-- Slide 3: k8s-wish architecture -->
-<div class="slide" id="s3">
+<!-- Slide 6: k8s-wish architecture -->
+<div class="slide" id="s6">
   <h2>k8s-wish-system &mdash; Architecture</h2>
   <p style="margin-bottom:0.5em">A single LLM call translates natural language into K8s manifests</p>
   <div class="arrow-flow">
@@ -314,8 +342,8 @@
   </div>
 </div>
 
-<!-- Slide 4: k8s-wish limitation -->
-<div class="slide" id="s4">
+<!-- Slide 7: k8s-wish limitation -->
+<div class="slide" id="s7">
   <h2>The single-shot limitation</h2>
   <div class="quote" style="margin:0.8em 0">
     "The LLM gets one chance to be right.<br>
@@ -343,8 +371,8 @@
   </div>
 </div>
 
-<!-- Slide 5: apchat -->
-<div class="slide" id="s5">
+<!-- Slide 8: apchat -->
+<div class="slide" id="s8">
   <h2>apchat &mdash; The agentic approach</h2>
   <p>A Claude Code-like assistant that can think, act, and self-correct</p>
   <div class="two-col" style="margin-top:0.5em">
@@ -372,8 +400,8 @@
   </div>
 </div>
 
-<!-- Slide 6: The joke + tttt -->
-<div class="slide" id="s6">
+<!-- Slide 9: The joke + tttt -->
+<div class="slide" id="s9">
   <div style="text-align:center; flex:1; display:flex; flex-direction:column; justify-content:center;">
     <p class="dim" style="font-size:1.2em; margin-bottom:1em">There are only two hard problems in computer science:</p>
     <h1 style="font-size:2.2em; line-height:1.4">
@@ -385,8 +413,8 @@
   </div>
 </div>
 
-<!-- Slide 7: tttt architecture -->
-<div class="slide" id="s7">
+<!-- Slide 10: tttt architecture -->
+<div class="slide" id="s10">
   <h2>tttt &mdash; Takes Two To Tango</h2>
   <p>A terminal multiplexer where <span class="highlight">the AI is in control</span></p>
   <div class="code-block" style="font-size:0.85em; margin:0.8em 0">Root Agent (Claude Opus)
@@ -421,8 +449,8 @@ tttt TUI
   </div>
 </div>
 
-<!-- Slide 8: Handoff -->
-<div class="slide" id="s8">
+<!-- Slide 11: Handoff -->
+<div class="slide" id="s11">
   <div style="text-align:center; flex:1; display:flex; flex-direction:column; justify-content:center;">
     <p style="font-size:1.5em; color:#94a3b8">And since we said it takes two...</p>
     <h1 style="margin:0.5em 0; font-size:3em">Demo time</h1>
@@ -431,7 +459,8 @@ tttt TUI
       They'll walk you through three demos.
     </p>
     <p class="dim" style="font-size:1.1em">
-      1. k8s-wish: single-shot &bull;
+      1a. k8s-wish: simple task &bull;
+      1b. k8s-wish: complex task &bull;
       2. apchat: agentic loop &bull;
       3. CEL: security rules
     </p>
@@ -442,8 +471,8 @@ tttt TUI
 
 <!-- ==================== PART 3: Andrew concludes ==================== -->
 
-<!-- Slide 9: What we just saw -->
-<div class="slide" id="s9">
+<!-- Slide 12: What we just saw -->
+<div class="slide" id="s12">
   <h2>What just happened</h2>
   <p style="font-size:1.1em; margin-bottom:0.5em">Task: <code>Deploy nginx + Service + NetworkPolicy</code></p>
   <div class="two-col">
@@ -475,8 +504,8 @@ tttt TUI
   </p>
 </div>
 
-<!-- Slide 10: Comparison table -->
-<div class="slide" id="s10">
+<!-- Slide 13: Comparison table -->
+<div class="slide" id="s13">
   <h2>Single-shot vs. Agentic &mdash; the tradeoffs</h2>
   <table style="font-size:1.05em">
     <tr><th>Dimension</th><th>k8s-wish (single-shot)</th><th>apchat (agentic)</th></tr>
@@ -491,8 +520,8 @@ tttt TUI
   </table>
 </div>
 
-<!-- Slide 11: Security - what's right -->
-<div class="slide" id="s11">
+<!-- Slide 14: Security - what's right -->
+<div class="slide" id="s14">
   <h2>k8s-wish security &mdash; what's right</h2>
   <ul style="font-size:1.2em">
     <li><span class="green">Dry-run by default</span> &mdash; nothing executes without explicit approval</li>
@@ -504,8 +533,8 @@ tttt TUI
   <p style="margin-top:1em; font-size:1.3em; color:#fbbf24">But...</p>
 </div>
 
-<!-- Slide 12: Security gaps -->
-<div class="slide" id="s12">
+<!-- Slide 15: Security gaps -->
+<div class="slide" id="s15">
   <h2>Security gaps discovered</h2>
   <table style="font-size:0.9em">
     <tr><th>#</th><th>Issue</th><th>Fix</th><th>Residual risk</th></tr>
@@ -519,8 +548,8 @@ tttt TUI
   </table>
 </div>
 
-<!-- Slide 13: CEL rules -->
-<div class="slide" id="s13">
+<!-- Slide 16: CEL rules -->
+<div class="slide" id="s16">
   <h2>CEL transition rules &mdash; the fix</h2>
   <p>Declared in the CRD. Enforced by the API server. No webhook needed.</p>
   <div class="two-col" style="margin-top:0.5em">
@@ -557,8 +586,8 @@ tttt TUI
   </p>
 </div>
 
-<!-- Slide 14: MCP vs CLI -->
-<div class="slide" id="s14">
+<!-- Slide 17: MCP vs CLI -->
+<div class="slide" id="s17">
   <h2>MCP vs. CLI &mdash; do we even need this?</h2>
   <div class="two-col">
     <div class="box">
@@ -586,8 +615,8 @@ tttt TUI
   </div>
 </div>
 
-<!-- Slide 15: Closing thoughts -->
-<div class="slide" id="s15">
+<!-- Slide 18: Closing thoughts -->
+<div class="slide" id="s18">
   <h2>Takeaways</h2>
   <ul style="font-size:1.3em; line-height:2">
     <li>Single-shot: simple, auditable, needs human review</li>
@@ -601,8 +630,8 @@ tttt TUI
   </div>
 </div>
 
-<!-- Slide 16: Links -->
-<div class="slide" id="s16">
+<!-- Slide 19: Links -->
+<div class="slide" id="s19">
   <div style="text-align:center; flex:1; display:flex; flex-direction:column; justify-content:center;">
     <h1 style="margin-bottom:0.8em">Thank you!</h1>
     <div class="repos">
