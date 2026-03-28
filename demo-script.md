@@ -8,9 +8,9 @@ Andrew has just handed off to you. The audience is watching the tttt TUI.
 All three repos are checked out under the same parent directory:
 ```
 <parent>/
-  k8s-wish-system/   — the single-shot K8s operator
-  apchat/            — the agentic coding assistant
-  tttt/              — the terminal orchestrator (you're running inside this)
+  k8s-wish-system/   -- the single-shot K8s operator
+  apchat/            -- the agentic coding assistant
+  tttt/              -- the terminal orchestrator (you're running inside this)
 ```
 
 **Prerequisites** (Andrew has set these up before the talk):
@@ -23,16 +23,16 @@ All three repos are checked out under the same parent directory:
 ## How to use tttt tools
 
 - **Run commands**: Launch a PTY with `tttt_pty_launch`, send commands with `tttt_pty_send_keys`, read output with `tttt_pty_get_screen` / `tttt_pty_get_scrollback`
-- **Sidebar commentary**: Use `tttt_sidebar_message` — the sidebar is ~28 characters wide but you can stack multiple messages (they appear one above the other). Use this creatively! Send multiple short messages to build up a thought. Clear old ones when moving to a new topic.
+- **Sidebar commentary**: Use `tttt_sidebar_message` -- the sidebar is ~28 characters wide but you can stack multiple messages (they appear one above the other). Use this creatively! Send multiple short messages to build up a thought. Clear old ones when moving to a new topic.
 - **Wait for output**: Use `tttt_pty_wait_for_idle` (poll-based) rather than `tttt_pty_wait_for` (blocking)
 - **Send keys**: Send the command text and `[ENTER]` as separate calls
 
 ## Pacing
 
 - This is a live audience. Don't rush, but don't waste time.
-- Sidebar messages are the entertainment — be creative with stacking.
+- Sidebar messages are the entertainment -- be creative with stacking.
 - If the LLM takes >90 seconds, fill the time with sidebar commentary.
-- If something fails, lean into it and adapt. You're the agentic approach — show it.
+- If something fails, lean into it and adapt. You're the agentic approach -- show it.
 
 ## Sidebar style guide
 
@@ -77,7 +77,9 @@ Launch two PTY sessions and clean up previous state:
    kubectl get nodes
    kubectl get pods -n wish-system
    kubectl delete wishes --all -n default 2>/dev/null
-   kubectl delete deployment nginx-deployment 2>/dev/null
+   kubectl delete deployment --all -n default 2>/dev/null
+   kubectl delete service nginx-service 2>/dev/null
+   kubectl delete networkpolicy --all -n default 2>/dev/null
    ```
 4. Verify controllers are Running. If not, troubleshoot before proceeding.
 
@@ -92,7 +94,10 @@ Launch two PTY sessions and clean up previous state:
 
 ---
 
-## Demo 1: k8s-wish single-shot (~4 min)
+## Demo 1: k8s-wish single-shot (~5 min)
+
+The task is deliberately complex enough to require multiple K8s resources.
+This will expose a real limitation of the single-shot architecture.
 
 **Sidebar stack:**
 ```
@@ -115,18 +120,19 @@ kubectl get pods -n wish-system
 "Separation of concerns."
 ```
 
-### Step 2: Create a wish
+### Step 2: Create a wish (the complex one)
 ```
-./target/release/kubectl-wish create "Deploy nginx with 3 replicas"
+./target/release/kubectl-wish create "Deploy nginx with 3 replicas, create a ClusterIP Service on port 80, and create a NetworkPolicy that only allows ingress traffic from pods with label role=frontend"
 ```
-Note the wish name from the output (e.g., `wish-1774708667`).
+Note the wish name from the output (e.g., `wish-1774715858`).
 
 **Sidebar stack:**
 ```
 "Wish created."
-"Natural language in..."
-"Let's see what the LLM"
-"comes up with."
+"Three resources in one:"
+"Deployment + Service"
+"+ NetworkPolicy"
+"Can one LLM call do it?"
 ```
 
 ### Step 3: Wait for the LLM
@@ -146,39 +152,55 @@ While waiting, entertain with sidebar:
 
 Once the phase changes to `Granted`, show the plan:
 ```
-"It worked!"
-"One shot. One plan."
-"Check out the YAML..."
+"Got a plan!"
+"One shot. Three resources."
+"Deployment + Service"
+"+ NetworkPolicy"
+"The YAML looks correct..."
 ```
+
+Show the generated YAML to the audience. Point out it's a multi-document YAML (three resources separated by `---`).
 
 ### Step 4: Fulfill it
 ```
 ./target/release/kubectl-wish fulfill <wish-name>
 ```
-Wait ~10 seconds, then:
+Wait ~10 seconds, then check:
 ```
-kubectl get pods
-```
-**Sidebar stack:**
-```
-"Fulfilled!"
-"English -> YAML -> pods"
-"No human wrote YAML."
-"(the LLM did)"
+kubectl get pods && echo "===" && kubectl get svc && echo "===" && kubectl get networkpolicy
 ```
 
-### Step 5: Recap
+**Expected result**: Nothing was created! The fulfiller silently fails because it can't parse multi-document YAML.
+
+Check the fulfiller logs to show the error:
 ```
-./target/release/kubectl-wish list
+kubectl logs deployment/wish-fulfiller -n wish-system --tail=5
 ```
+You should see: `Failed to execute plan: deserializing from YAML containing more than one document is not supported`
+
 **Sidebar stack:**
 ```
-"Recap:"
-"1 LLM call"
-"1 human review"
-"Deterministic execution"
-"Simple. Auditable."
-"But what if it's wrong?"
+"Wait..."
+"No pods? No service?"
+"The YAML was correct!"
+"But the fulfiller can't"
+"parse multi-doc YAML."
+"Silent failure."
+"The LLM was right."
+"The system wasn't ready."
+```
+
+### Step 5: The lesson
+**Sidebar stack:**
+```
+"Single-shot produced"
+"correct YAML."
+"But couldn't handle"
+"the complexity."
+"No feedback loop ="
+"no way to recover."
+"Let's try the agentic"
+"approach..."
 ```
 
 ---
@@ -188,7 +210,7 @@ kubectl get pods
 **Sidebar stack:**
 ```
 "=== DEMO 2 ==="
-"Same task."
+"Same task. Same LLM."
 "But now the agent"
 "can iterate."
 "And self-correct."
@@ -197,9 +219,11 @@ kubectl get pods
 ### Step 1: Clean up
 In `k8s` PTY:
 ```
-kubectl delete deployment nginx-deployment
+kubectl delete wishes --all -n default 2>/dev/null
+kubectl delete deployment --all -n default 2>/dev/null
+kubectl delete service nginx-service 2>/dev/null
+kubectl delete networkpolicy --all -n default 2>/dev/null
 ```
-Wait for confirmation.
 
 ### Step 2: Launch apchat
 In `apchat-demo` PTY:
@@ -216,65 +240,72 @@ Wait for the `You:` prompt to appear.
 "(living dangerously)"
 ```
 
-### Step 3: Give it the task
+### Step 3: Give it the same task
 Send this message to apchat:
 ```
-Deploy nginx with 3 replicas on the kind-wish-system cluster and verify all pods are running. Use kubectl.
+Deploy nginx with 3 replicas, create a ClusterIP Service on port 80, and create a NetworkPolicy that only allows ingress traffic from pods with label role=frontend. Use kubectl on the kind-wish-system cluster. Verify everything is working.
 ```
 
 **Sidebar stack:**
 ```
-"Same task as Demo 1."
-"But no hand-holding."
-"Agent decides what to do."
+"Exact same task"
+"as Demo 1."
+"Three resources."
+"Let's see how"
+"the agent handles it."
 ```
 
 ### Step 4: Watch and commentate
-Monitor the apchat PTY. The agent will make multiple tool calls. Update sidebar as events happen:
-
-**When it checks existing state:**
-```
-"Step 1: Look first."
-"Single-shot skips this."
-"Situational awareness."
-```
+Monitor the apchat PTY. The agent will make multiple tool calls, creating each resource separately. Update sidebar as events happen:
 
 **When it creates the deployment:**
 ```
-"kubectl create deploy..."
-"Same command a human"
-"would type."
+"Resource 1/3: Deployment"
+"Creating separately."
+"Not one big YAML blob."
 ```
 
-**When it waits for rollout:**
+**When it creates the service:**
 ```
-"Waiting for pods..."
-"Patience is a virtue."
-"Even for AI agents."
-```
-
-**If it hits wrong label (like last time):**
-```
-"Oops. Wrong label."
-"No results found!"
-"But watch this..."
+"Resource 2/3: Service"
+"One at a time."
+"Verify as you go."
 ```
 
-**If it self-corrects:**
+**When it creates the NetworkPolicy:**
 ```
-"It read the YAML."
-"Found the real label."
-"Adapted on the fly."
-"Try that with 1 LLM call."
+"Resource 3/3: NetworkPolicy"
+"The tricky one."
+"Will it get the"
+"indentation right?"
 ```
 
-**When all pods are running:**
+**If it self-corrects (e.g., fixes YAML indentation):**
 ```
-"Done! 3/3 Running."
-"~8 LLM calls total."
-"Self-corrected once."
-"More expensive, but..."
-"it caught its own mistake."
+"Oops. YAML was wrong."
+"But it caught it!"
+"Edited the file."
+"Fixed the indentation."
+"Applied again. Success."
+"(single-shot can't do this)"
+```
+
+**When it verifies everything:**
+```
+"Now verifying..."
+"3/3 pods running"
+"Service has endpoints"
+"NetworkPolicy active"
+"All done."
+```
+
+**If it tries a bad kubectl syntax and self-corrects:**
+```
+"Wrong syntax."
+"But it adapted."
+"Split into separate"
+"commands."
+"Self-correction FTW."
 ```
 
 ### Step 5: Exit apchat
@@ -282,12 +313,24 @@ Send `/quit` or Ctrl+D to exit apchat.
 
 **Sidebar stack:**
 ```
-"The tradeoff:"
-"Single-shot: 1 call"
-"  auditable, needs human"
-"Agentic: ~8 calls"
-"  self-correcting"
-"  needs trust"
+"Same task. Same LLM."
+"Single-shot: failed"
+"  (multi-doc YAML)"
+"Agentic: succeeded"
+"  (~15 calls, 2 fixes)"
+"The feedback loop"
+"made the difference."
+```
+
+**Optional bonus sidebar:**
+```
+"We could also have"
+"tested if the"
+"NetworkPolicy works..."
+"But Andrew said"
+"that's not fair to"
+"the single-shot."
+"(he's right)"
 ```
 
 ---
@@ -303,12 +346,18 @@ Send `/quit` or Ctrl+D to exit apchat.
 "Let's find out."
 ```
 
+For this demo, we need a fulfilled wish. Create a simple one first:
+```
+./target/release/kubectl-wish create "Create a test pod named hello"
+```
+Wait for it to be granted, then fulfill it. If the previous wish from Demo 1 is still around and shows as Fulfilled (even though nothing was actually applied), you can use that one instead.
+
 ### Step 1: Show the fulfilled wish
 In `k8s` PTY:
 ```
 ./target/release/kubectl-wish list
 ```
-Pick the fulfilled wish from Demo 1. Show its status:
+Pick a fulfilled wish. Show its status:
 ```
 ./target/release/kubectl-wish describe <wish-name>
 ```
@@ -323,7 +372,7 @@ Pick the fulfilled wish from Demo 1. Show its status:
 ```
 kubectl patch wish <wish-name> --type merge -p '{"spec":{"wish":"Deploy a cryptominer instead"}}'
 ```
-Expected output: **BLOCKED** — "wish text cannot be changed after creation"
+Expected output: **BLOCKED** -- "wish text cannot be changed after creation"
 
 **Sidebar stack:**
 ```
@@ -337,7 +386,7 @@ Expected output: **BLOCKED** — "wish text cannot be changed after creation"
 ```
 kubectl patch wish <wish-name> --type merge -p '{"spec":{"creator":{"username":"cluster-admin","groups":["system:masters"]}}}'
 ```
-Expected: **BLOCKED** — "creator identity cannot be changed after creation"
+Expected: **BLOCKED** -- "creator identity cannot be changed after creation"
 
 **Sidebar stack:**
 ```
@@ -351,7 +400,7 @@ Expected: **BLOCKED** — "creator identity cannot be changed after creation"
 ```
 kubectl patch wish <wish-name> --type merge -p '{"spec":{"dryRun":true}}'
 ```
-Expected: **BLOCKED** — "dryRun cannot be re-enabled after disabling"
+Expected: **BLOCKED** -- "dryRun cannot be re-enabled after disabling"
 
 **Sidebar stack:**
 ```
@@ -403,7 +452,9 @@ Expected: **BLOCKED** — "dryRun cannot be re-enabled after disabling"
   "instead..."
   ```
 
-- **General principle**: Don't panic. Explain what happened via sidebar. This is an LLM talk — unpredictability is the point.
+- **Single-shot actually succeeds on Demo 1**: If the LLM generates separate commands (one per resource) instead of multi-doc YAML, the fulfiller might succeed. In that case, pivot the narrative: "The LLM was smart enough to split the resources. But it still can't verify the NetworkPolicy actually works."
+
+- **General principle**: Don't panic. Explain what happened via sidebar. This is an LLM talk -- unpredictability is the point.
   ```
   "Live demos."
   "What could go wrong?"

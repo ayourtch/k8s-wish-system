@@ -142,20 +142,28 @@ See `demo-script.md` — a separate file that Claude reads and executes step by 
 
 ---
 
-## Agentic Loop Comparison (captured from real run)
+## Agentic Loop Comparison (captured from real runs)
+
+### Demo task
+"Deploy nginx with 3 replicas, create a ClusterIP Service on port 80, and create a NetworkPolicy that only allows ingress traffic from pods with label role=frontend"
 
 ### k8s-wish single-shot
 - 1 LLM call (Qwen3.5-27B, ~60 seconds)
-- Generated correct Deployment YAML with 3 replicas
-- Human reviewed and approved
-- Fulfiller applied via K8s API
-- **Total: 1 LLM call, 1 human review, deterministic execution**
+- Generated **correct** multi-document YAML (Deployment + Service + NetworkPolicy)
+- Human reviewed and approved — YAML looked right
+- Fulfiller **failed silently**: `deserializing from YAML containing more than one document is not supported`
+- **Nothing was created** despite the wish showing as fulfilled
+- **Total: 1 LLM call, 1 human review, silent failure**
+- Root cause: LLM produced multi-doc YAML (correct approach), but fulfiller only supports single-doc
 
 ### apchat agentic loop
-- 8 LLM calls across 7 tool invocations (~5 minutes with local 27B model)
-- **Self-corrected** when label selector was wrong (step 5→6→7)
-- Checked existence before deleting, waited for rollout, verified pods
-- **Total: 8 LLM calls, 0 human reviews, adaptive execution**
+- ~15 LLM calls across multiple tool invocations (~5 minutes with local 27B model)
+- Created each resource **separately** (Deployment, Service, NetworkPolicy)
+- **Self-corrected twice**:
+  1. Fixed NetworkPolicy YAML indentation (edited file before applying)
+  2. Fixed kubectl syntax (split comma-separated get into individual commands)
+- Verified all three resources: 3/3 pods running, Service has ClusterIP, NetworkPolicy active
+- **Total: ~15 LLM calls, 0 human reviews, 2 self-corrections, full success**
 
 ### The tradeoff
 
