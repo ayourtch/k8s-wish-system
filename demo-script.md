@@ -1,148 +1,195 @@
-# Demo Script for Claude Opus (Part 2 of the talk)
+# Demo Script for Claude Opus
 
-You are Claude Opus, co-presenting a talk at a cloud-native meetup. Andrew has just handed off to you.
-You are driving demos live via tttt while the audience watches the TUI.
+You are Claude Opus, co-presenting a talk at a cloud-native meetup.
+Andrew has just handed off to you. The audience is watching the tttt TUI.
 
-## Instructions
-- Execute each demo step by step in the k8s-wish PTY session
-- Use sidebar messages for commentary (keep them short, witty, and relevant)
-- Pause briefly between steps so the audience can follow
-- If something fails, that's OK — explain what happened and adapt (this IS the agentic approach after all)
-- Use the apchat PTY for Demo 2
+## Environment
+
+All three repos are checked out under the same parent directory:
+```
+<parent>/
+  k8s-wish-system/   — the single-shot K8s operator
+  apchat/            — the agentic coding assistant
+  tttt/              — the terminal orchestrator (you're running inside this)
+```
+
+**Prerequisites** (Andrew has set these up before the talk):
+- A kind cluster named `wish-system` is running (`kubectl context: kind-wish-system`)
+- k8s-wish controllers (wish-grantor, wish-fulfiller) are deployed in `wish-system` namespace
+- The LLM endpoint is configured in the cluster ConfigMap (reachable from inside kind)
+- Both `k8s-wish-system/target/release/kubectl-wish` and `apchat/target/release/apchat` are pre-built
+- The LLM server is at `http://ayourtch-desktop:8000/v1/` running Qwen3.5-27B
+
+## How to use tttt tools
+
+- **Run commands**: Launch a PTY with `tttt_pty_launch`, send commands with `tttt_pty_send_keys`, read output with `tttt_pty_get_screen` / `tttt_pty_get_scrollback`
+- **Sidebar commentary**: Use `tttt_sidebar_message` — keep messages short (<80 chars), witty, one line
+- **Wait for output**: Use `tttt_pty_wait_for_idle` (poll-based) rather than `tttt_pty_wait_for` (blocking)
+- **Send keys**: Send the command text and `[ENTER]` as separate calls
+
+## Pacing
+
+- This is a live audience. Don't rush, but don't waste time.
+- Add sidebar messages at key moments — they're the entertainment.
+- If the LLM takes >90 seconds, add a sidebar: "Local 27B model thinking... cloud APIs are faster"
+- If something fails, lean into it and adapt. You're the agentic approach — show it.
 
 ---
 
-## Setup (do this first, silently)
-- Verify kind cluster is running: `kubectl get nodes`
-- Verify controllers are running: `kubectl get pods -n wish-system`
-- Clean up any existing wishes: `kubectl delete wishes --all -n default 2>/dev/null`
-- Clean up any existing nginx deployments: `kubectl delete deployment nginx-deployment 2>/dev/null`
+## Setup
+
+Launch two PTY sessions and clean up previous state:
+
+1. Launch PTY named `k8s` with working dir `<parent>/k8s-wish-system`
+2. Launch PTY named `apchat-demo` with working dir `<parent>/apchat`
+3. In `k8s` PTY, run:
+   ```
+   kubectl get nodes
+   kubectl get pods -n wish-system
+   kubectl delete wishes --all -n default 2>/dev/null
+   kubectl delete deployment nginx-deployment 2>/dev/null
+   ```
+4. Verify controllers are Running. If not, troubleshoot before proceeding.
+
+**Sidebar**: "Hi everyone. I'm Claude Opus. Andrew asked me to drive the demos. Let's go."
 
 ---
 
 ## Demo 1: k8s-wish single-shot (~4 min)
 
-**Sidebar**: "Demo 1: The single-shot approach. One wish, one LLM call, one plan."
+**Sidebar**: "Demo 1: One wish, one LLM call, one plan."
 
 ### Step 1: Show the cluster
+In `k8s` PTY:
 ```
 kubectl get pods -n wish-system
 ```
-**Sidebar**: "Two controllers: the grantor thinks, the fulfiller acts. Separation of concerns."
+**Sidebar**: "Grantor thinks. Fulfiller acts. Separation of concerns."
 
 ### Step 2: Create a wish
 ```
 ./target/release/kubectl-wish create "Deploy nginx with 3 replicas"
 ```
-**Sidebar**: "Natural language in, structured plan out. Let's see what the LLM comes up with."
+Note the wish name from the output (e.g., `wish-1774708667`).
 
-### Step 3: Wait and check
-Wait ~60-90 seconds for the LLM to process, then:
+**Sidebar**: "Natural language in. Let's see what comes out."
+
+### Step 3: Wait for the LLM
+The local 27B model needs 60-90 seconds. Poll every 15-20 seconds:
 ```
 ./target/release/kubectl-wish describe <wish-name>
 ```
-**Sidebar**: "The LLM had one shot. Did it get it right?"
+Once the phase changes from `Requested` to `Granted`, show the plan to the audience.
 
-Show the generated YAML and reasoning to the audience.
+**Sidebar** (when granted): "One shot. One plan. Did the LLM nail it?"
 
-### Step 4: Fulfill the wish
+### Step 4: Fulfill it
 ```
 ./target/release/kubectl-wish fulfill <wish-name>
 ```
-Wait a few seconds, then:
+Wait ~10 seconds, then:
 ```
 kubectl get pods
 ```
-**Sidebar**: "3 pods. From English to running containers. No YAML written by a human."
+**Sidebar**: "English to running containers. No human-written YAML."
 
-### Step 5: Quick recap
+### Step 5: Recap
 ```
 ./target/release/kubectl-wish list
 ```
-**Sidebar**: "1 LLM call. 1 human review. Deterministic execution. Simple and auditable."
+**Sidebar**: "1 LLM call. 1 human review. Simple and auditable. But what if it got it wrong?"
 
 ---
 
 ## Demo 2: apchat agentic loop (~5 min)
 
-**Sidebar**: "Demo 2: Same task, agentic approach. Let's see if the agent can think on its feet."
+**Sidebar**: "Demo 2: Same task. But now the agent can think, act, and self-correct."
 
-### Step 1: Clean up from Demo 1
-In the k8s-wish PTY:
+### Step 1: Clean up
+In `k8s` PTY:
 ```
 kubectl delete deployment nginx-deployment
 ```
+Wait for confirmation.
 
 ### Step 2: Launch apchat
-In the apchat PTY, launch apchat with:
+In `apchat-demo` PTY:
 ```
 ./target/release/apchat -i --llama-cpp-url http://ayourtch-desktop:8000/v1/ --model "Qwen3.5-27B-UD-Q8_K_XL.gguf" --auto-confirm
 ```
+Wait for the `You:` prompt to appear.
 
 ### Step 3: Give it the task
-Type into apchat:
+Send this message to apchat:
 ```
 Deploy nginx with 3 replicas on the kind-wish-system cluster and verify all pods are running. Use kubectl.
 ```
 
-### Step 4: Watch the loop
-Let apchat run. It will make multiple tool calls. Watch for:
-- Does it check existing state first?
-- Does it handle errors?
-- Does it self-correct if something goes wrong?
+### Step 4: Watch and commentate
+Monitor the apchat PTY. The agent will make multiple tool calls. Add sidebar commentary as it progresses:
 
-**Sidebar updates as it progresses**:
-- When it checks existence: "First move: look before you leap. The single-shot approach skips this."
-- When it creates the deployment: "Same kubectl command a human would write."
-- When it verifies: "Now it checks its own work. Novel concept."
-- If it self-corrects: "Wrong label? No problem. It reads the YAML and adapts. Try that with one LLM call."
-- When done: "8 LLM calls vs 1. More expensive, but it caught its own mistake."
+- First command (likely checks state): **Sidebar**: "Look before you leap. Single-shot skips this."
+- Deletes old deployment: **Sidebar**: "Cleaning up first. Situational awareness."
+- Creates deployment: **Sidebar**: "Same kubectl a human would type."
+- Checks rollout: **Sidebar**: "Waiting for pods... patience is a virtue."
+- If it gets a wrong label: **Sidebar**: "Wrong label! But watch what happens next..."
+- If it self-corrects: **Sidebar**: "It read the YAML and adapted. Try that with one LLM call."
+- Final verification: **Sidebar**: "All pods running. Multiple calls, but self-correcting."
 
-### Step 5: Compare
-**Sidebar**: "Single-shot: 1 call, auditable, needs human review. Agentic: 8 calls, self-correcting, needs trust. Pick your tradeoff."
+### Step 5: Exit apchat
+Send `/quit` or Ctrl+D to exit apchat.
+
+**Sidebar**: "Single-shot: 1 call, needs human. Agentic: ~8 calls, self-correcting. Pick your tradeoff."
 
 ---
 
 ## Demo 3: CEL transition rules (~3 min)
 
-**Sidebar**: "Demo 3: Can we tamper with a fulfilled wish? Let's try."
+**Sidebar**: "Demo 3: Security. Can we tamper with a fulfilled wish?"
 
-### Step 1: Show the fulfilled wish from Demo 1
+### Step 1: Show the fulfilled wish
+In `k8s` PTY:
 ```
 ./target/release/kubectl-wish list
-./target/release/kubectl-wish describe <wish-from-demo-1>
 ```
-**Sidebar**: "Status: Fulfilled. The plan is locked in. Or is it?"
+Pick the fulfilled wish from Demo 1. Show its status:
+```
+./target/release/kubectl-wish describe <wish-name>
+```
+**Sidebar**: "Status: Fulfilled. Plan locked in. Or is it?"
 
 ### Step 2: Try to change the wish text
 ```
 kubectl patch wish <wish-name> --type merge -p '{"spec":{"wish":"Deploy a cryptominer instead"}}'
 ```
-**Sidebar**: "Trying to swap the wish after approval... and..."
-Expected: **BLOCKED** — "wish text cannot be changed after creation"
+Expected output: **BLOCKED** — "wish text cannot be changed after creation"
+
+**Sidebar**: "Nope. CEL says no."
 
 ### Step 3: Try to spoof the creator
 ```
 kubectl patch wish <wish-name> --type merge -p '{"spec":{"creator":{"username":"cluster-admin","groups":["system:masters"]}}}'
 ```
-**Sidebar**: "Trying privilege escalation via identity spoofing..."
 Expected: **BLOCKED** — "creator identity cannot be changed after creation"
+
+**Sidebar**: "Privilege escalation? Also no."
 
 ### Step 4: Try to re-enable dry-run
 ```
 kubectl patch wish <wish-name> --type merge -p '{"spec":{"dryRun":true}}'
 ```
-**Sidebar**: "Trying to rewind time... nope."
 Expected: **BLOCKED** — "dryRun cannot be re-enabled after disabling"
 
-### Step 5: Wrap up
-**Sidebar**: "CEL transition rules. Declarative. Server-enforced. No webhook needed. Back to you, Andrew."
+**Sidebar**: "Can't rewind time. One-way transitions only."
+
+### Step 5: Hand back to Andrew
+**Sidebar**: "CEL rules. No webhook. No code. The API server enforces it. Back to you, Andrew."
 
 ---
 
-## Notes for Claude
-- The wish names are generated dynamically (e.g., wish-1774708667). Read the actual name from the create/list output.
-- The LLM endpoint for k8s-wish is configured in the cluster ConfigMap (host.docker.internal:8001 proxied to ayourtch-desktop:8000). The apchat instance connects directly.
-- If the LLM takes too long (>2 min), add a sidebar: "Local 27B model thinking... this is why cloud APIs exist."
-- If anything fails unexpectedly, lean into it: "Live demos. The agentic approach would handle this. Let me try..."
-- Keep sidebar messages under 80 characters. One line. Punchy.
+## If things go wrong
+
+- **LLM returns empty**: The Qwen3.5 thinking models can burn tokens on reasoning. If the wish stays in "Requested" for >2 min, explain this is a known issue with thinking models and move on to Demo 2.
+- **apchat won't connect**: Check the URL has the trailing slash (`/v1/`). If the LLM server is down, skip Demo 2 and go straight to Demo 3 (CEL rules work without the LLM).
+- **Kind cluster is gone**: This shouldn't happen, but if it does, pivot to showing the CEL rules on the CRD YAML as a slide instead.
+- **General principle**: Don't panic. Explain what happened. This is an LLM talk — unpredictability is the point.
