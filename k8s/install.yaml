@@ -23,14 +23,7 @@ metadata:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  annotations:
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"apiextensions.k8s.io/v1","kind":"CustomResourceDefinition","metadata":{"annotations":{},"name":"wishes.wish.ayourt.ch"},"spec":{"group":"wish.ayourt.ch","names":{"kind":"Wish","plural":"wishes","shortNames":["wsh"],"singular":"wish"},"scope":"Namespaced","versions":[{"additionalPrinterColumns":[{"jsonPath":".status.phase","name":"Phase","type":"string"},{"jsonPath":".status.name","name":"Name","type":"string"},{"jsonPath":".metadata.creationTimestamp","name":"Age","type":"date"}],"name":"v1alpha1","schema":{"openAPIV3Schema":{"properties":{"spec":{"properties":{"autoFulfill":{"default":false,"description":"Auto-execute after granting","type":"boolean"},"dryRun":{"default":true,"description":"If true, plan but don't execute","type":"boolean"},"llmConfig":{"properties":{"credentialsSecretRef":{"properties":{"key":{"type":"string"},"name":{"type":"string"}},"type":"object"},"endpoint":{"type":"string"},"model":{"type":"string"}},"type":"object"},"wish":{"description":"Natural language wish","type":"string"}},"required":["wish"],"type":"object"},"status":{"properties":{"dryRunResults":{"items":{"properties":{"command":{"type":"string"},"expectedOutcome":{"type":"string"}},"type":"object"},"type":"array"},"error":{"type":"string"},"fulfilled":{"description":"Immutable once true","type":"boolean"},"fulfilledAt":{"format":"date-time","type":"string"},"name":{"description":"LLM-assigned semantic name","type":"string"},"phase":{"enum":["Requested","Granted","Fulfilled","Failed"],"type":"string"},"plan":{"properties":{"commands":{"items":{"properties":{"command":{"type":"string"},"type":{"enum":["kubectl","shell"],"type":"string"},"yaml":{"type":"string"}},"type":"object"},"type":"array"},"reasoning":{"type":"string"}},"type":"object"}},"type":"object"}},"type":"object"}},"served":true,"storage":true,"subresources":{"status":{}}}]}}
-  creationTimestamp: "2025-12-22T08:35:07Z"
-  generation: 1
   name: wishes.wish.ayourt.ch
-  resourceVersion: "439"
-  uid: e2e36ad0-14b5-40af-95c6-ba14d1fa0b3c
 spec:
   conversion:
     strategy: None
@@ -107,6 +100,22 @@ spec:
             required:
             - wish
             type: object
+            x-kubernetes-validations:
+            # Wish text is immutable once created
+            - rule: "self.wish == oldSelf.wish"
+              message: "wish text cannot be changed after creation"
+            # Creator identity is immutable once set
+            - rule: "!has(oldSelf.creator) || self.creator == oldSelf.creator"
+              message: "creator identity cannot be changed after creation"
+            # dryRun can only transition true→false (to fulfill), never back
+            - rule: "oldSelf.dryRun || self.dryRun == oldSelf.dryRun"
+              message: "dryRun cannot be re-enabled after disabling"
+            # autoFulfill is immutable once set
+            - rule: "self.autoFulfill == oldSelf.autoFulfill"
+              message: "autoFulfill cannot be changed after creation"
+            # targetNamespace is immutable
+            - rule: "self.targetNamespace == oldSelf.targetNamespace"
+              message: "targetNamespace cannot be changed after creation"
           status:
             properties:
               dryRunResults:
@@ -156,32 +165,24 @@ spec:
                     type: string
                 type: object
             type: object
+            x-kubernetes-validations:
+            # Execution plan is immutable once set by the grantor
+            - rule: "!has(oldSelf.plan) || self.plan == oldSelf.plan"
+              message: "execution plan cannot be modified once granted"
+            # fulfilled is a one-way flag — cannot revert to false
+            - rule: "!oldSelf.fulfilled || self.fulfilled"
+              message: "fulfilled status cannot be reverted"
+            # Fulfilled wishes cannot change phase
+            - rule: "!has(oldSelf.phase) || oldSelf.phase != 'Fulfilled' || self.phase == 'Fulfilled'"
+              message: "fulfilled wishes cannot change phase"
+            # Granted wishes cannot revert to Requested
+            - rule: "!has(oldSelf.phase) || oldSelf.phase != 'Granted' || self.phase != 'Requested'"
+              message: "granted wishes cannot revert to requested"
         type: object
     served: true
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: Wish
-    listKind: WishList
-    plural: wishes
-    shortNames:
-    - wsh
-    singular: wish
-  conditions:
-  - lastTransitionTime: "2025-12-22T08:35:07Z"
-    message: no conflicts found
-    reason: NoConflicts
-    status: "True"
-    type: NamesAccepted
-  - lastTransitionTime: "2025-12-22T08:35:07Z"
-    message: the initial names have been accepted
-    reason: InitialNamesAccepted
-    status: "True"
-    type: Established
-  storedVersions:
-  - v1alpha1
 ---
 ---
 apiVersion: v1
