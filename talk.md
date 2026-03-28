@@ -2,68 +2,173 @@
 
 ## Talk Structure (~37 min)
 
-### Act 0: Opening (3 min)
+### Part 1: Andrew presents (slides) — ~15 min
+
+#### Opening (2 min)
 - "Can we use LLMs to avoid writing YAML?" — the provocation
 - Quick show of hands: who's tired of writing K8s YAML? Who's used LLMs for it?
 - Brief bio/context (25 years Cisco → open source agentic AI)
 
-### Act 1: The Single-Shot Approach — k8s-wish-system (10 min)
+#### k8s-wish-system architecture (5 min)
 - **The idea**: natural language → kubectl, one LLM call, human approval
-- **Live demo or walkthrough**: `kubectl wish create "deploy nginx with 3 replicas"` → see the plan → `kubectl wish fulfill`
-- **Architecture**: CRD, wish-grantor (one LLM call), wish-fulfiller (execution), dry-run by default
-- **What it gets right**: safety (dry-run default, creator impersonation, immutable fulfillment), simplicity, works with any OpenAI-compatible endpoint including local models
-- **What it gets wrong**: one shot to get it right — no iteration, no feedback loop, no awareness of cluster state beyond what you tell it
+- **Architecture slide**: CRD → wish-grantor (single LLM call) → wish-fulfiller (execution)
+- **Safety model**: dry-run by default, creator impersonation, immutable fulfillment, separate RBAC
+- Works with any OpenAI-compatible endpoint including local models (Ollama, llama.cpp)
+- **The limitation**: one shot to get it right — no iteration, no feedback loop, no awareness of cluster state
 
-### Act 2: The Agentic Approach — apchat + tttt (15 min)
+#### apchat (3 min)
 - **The gap**: what if the LLM needs to iterate? Inspect cluster state? Fix its own mistakes?
-- **apchat**: 67+ tools, multi-provider LLM support, skill system — a Claude Code-like agent you control
-- **tttt**: the orchestration layer — one AI agent spawning and coordinating others through MCP tools
-- **Key insight**: tttt inverts the terminal multiplexer — the AI is in control, the human observes
-- **Demo idea**: show apchat/tttt doing a K8s task iteratively — deploying something, hitting an error, inspecting logs, fixing it, succeeding. The "agentic loop" in action.
-- **What it gets right**: iteration, self-correction, can inspect real cluster state, parallel agent delegation
-- **What it gets wrong**: complexity, cost (more LLM calls), trust boundary is wider, harder to audit
+- apchat: a Claude Code-like agentic coding assistant, written in Rust
+- 67+ tools (file ops, terminal, search, LLM calls), 37 curated skills, multi-provider support
+- Key difference: the agent runs commands, reads output, decides what to do next — a feedback loop
 
-### Act 3: Security Deep Dive (8 min)
-- See detailed security analysis below
-- Side-by-side: single-shot vs. agentic on the same task
-- When to use which: simple/known patterns → single-shot; complex/exploratory → agentic
-- The trust spectrum: human-in-the-loop (wish system) vs. autonomous agent (tttt)
+#### The joke + tttt intro (2 min)
+> "There are only two hard problems in computer science: cache invalidation, naming things, and off-by-one errors."
 
-### Act 4: MCP vs. CLI — Do We Even Need This? (5 min)
+- Enter **tttt** — "Takes Two To Tango"
+- One slide on tttt architecture: a terminal multiplexer where the AI is in control, not the human
+- Root agent (Claude Opus) spawns worker sessions, monitors via MCP tools, coordinates work
+- The human watches via the TUI — or from their phone via `tttt attach`
 
-**The provocation**: kubectl is well-documented, has bash completion, rich help text, and decades of muscle memory in the community. Why would we add an MCP layer?
+#### The handoff (1 min)
+> "And since we said it takes two... let me introduce my co-presenter. Claude Opus is driving tttt right now, reading a demo script. They'll walk you through the demos while I grab some water."
 
-#### The case AGAINST MCP for K8s
-- **kubectl already works**: `kubectl get pods`, `kubectl logs`, `kubectl apply` — every LLM already knows these commands. They're in every training set.
-- **Shell is the universal MCP**: An agent with a terminal (like Claude Code, apchat+tttt) can already run `kubectl` directly. No MCP server needed.
-- **Extra abstraction = extra bugs**: An MCP server wrapping kubectl is a translation layer that can lose fidelity, go stale when K8s APIs change, and adds a dependency to maintain.
-- **The LLM already speaks kubectl**: Ask any frontier model to write a kubectl command and it will. The problem was never "how do I talk to K8s" — it was "how do I talk to K8s *safely*."
-- **Documentation is the original MCP**: Well-written `--help` text and man pages are already tool descriptions. The LLM reads them.
+*Andrew launches tttt with Claude Opus reading the demo script*
 
-#### The case FOR MCP for K8s
-- **Structured output vs. text parsing**: `kubectl get pods -o json` works, but the agent has to know to ask for JSON, parse it, handle pagination. MCP gives you typed responses natively.
-- **Safety boundaries**: An MCP server can enforce read-only access, namespace scoping, resource allowlists — things that are hard to enforce when the agent has raw shell access.
-- **Discoverability**: MCP tool listings tell the agent exactly what it can do. With raw kubectl, the agent has to guess or explore.
-- **Composability**: MCP tools can be composed across systems — K8s + Prometheus + PagerDuty in one agent context, all with the same interface.
-- **The wish-system gap**: k8s-wish-system can't inspect cluster state before generating a plan. An MCP server could give the grantor awareness of existing resources, making the single-shot approach smarter.
+---
 
-#### The honest answer
-- For **agentic tools with terminal access** (Claude Code, apchat+tttt): MCP for K8s is mostly redundant. The agent can just run kubectl.
-- For **constrained environments** (chatbots, CI/CD pipelines, non-terminal agents): MCP provides a structured, safe interface.
-- For **the wish-system specifically**: MCP would be valuable as a way to give the grantor read-only cluster awareness without giving it shell access.
-- **The real value of MCP isn't replacing CLIs — it's replacing the trust boundary.** A CLI with shell access is all-or-nothing. MCP lets you expose exactly the operations you want, with exactly the permissions you choose.
+### Part 2: Claude Opus drives demos via tttt — ~12 min
 
-#### The meta-observation
-- We're watching the same pattern that played out with REST APIs vs. CLIs
-- CLIs came first, APIs came later for programmatic access
-- MCP is the "API layer" for AI agents — not replacing CLIs, but complementing them
-- The question isn't "MCP or CLI?" — it's "when does structured tool access matter more than raw shell power?"
+Claude reads `demo-script.md` and executes the demos live, with sidebar commentary.
 
-### Closing (2 min)
-- "The YAML isn't the hard part — the feedback loop is"
-- "And the feedback loop isn't the hard part either — the trust boundary is"
-- Links to all three repos
-- Q&A
+#### Demo 1: k8s-wish single-shot (4 min)
+1. Show the kind cluster is running: `kubectl get pods -n wish-system`
+2. Create a wish: `kubectl wish create "Deploy nginx with 3 replicas"`
+3. Wait for the LLM to generate the plan
+4. Show the plan: `kubectl wish describe <wish-name>`
+5. Fulfill it: `kubectl wish fulfill <wish-name>`
+6. Verify: `kubectl get pods` — 3 nginx pods running
+7. **Sidebar commentary**: "One LLM call. One plan. One review. Simple and auditable."
+
+#### Demo 2: apchat agentic loop (5 min)
+1. Delete the nginx deployment first
+2. Launch apchat with the same LLM
+3. Give it the same task: "Deploy nginx with 3 replicas and verify all pods are running"
+4. Watch the agentic loop:
+   - Step 1: `kubectl get deployment nginx-deployment` — checks if it exists
+   - Step 2: `kubectl delete deployment nginx-deployment` — cleans up
+   - Step 3: `kubectl create deployment nginx-deployment --image=nginx --replicas=3` — deploys
+   - Step 4: `kubectl rollout status deployment/nginx-deployment` — waits for rollout
+   - Step 5: `kubectl get pods -l app=nginx` — **wrong label, no results!**
+   - Step 6: `kubectl get deployment -o yaml | head -30` — **self-corrects**, inspects YAML to find actual label
+   - Step 7: `kubectl get pods -l app=nginx-deployment` — finds all 3 pods running
+5. **Sidebar commentary**: "7 tool calls. Self-corrected on step 5. The single-shot approach can't do this."
+
+#### Demo 3: CEL transition rules (3 min)
+1. Try to tamper with the fulfilled wish: `kubectl patch wish <name> --type merge -p '{"spec":{"wish":"Deploy redis instead"}}'`
+   - **Blocked**: "wish text cannot be changed after creation"
+2. Try to spoof creator: `kubectl patch wish <name> --type merge -p '{"spec":{"creator":{"username":"evil","groups":["system:masters"]}}}'`
+   - **Blocked**: "creator identity cannot be changed after creation"
+3. Try to re-enable dryRun: `kubectl patch wish <name> --type merge -p '{"spec":{"dryRun":true}}'`
+   - **Blocked**: "dryRun cannot be re-enabled after disabling"
+4. **Sidebar commentary**: "CEL rules. No webhook. No extra code. The API server does the work."
+
+---
+
+### Part 3: Andrew concludes (slides) — ~10 min
+
+#### Security deep dive (5 min)
+
+**What k8s-wish gets right** (slide):
+- Dry-run by default
+- Shell commands blocked
+- Creator impersonation via SelfSubjectReview
+- Immutable fulfillment
+- Separate RBAC for planning vs execution
+
+**But not so secure** (slide — the table):
+
+| # | Issue | Fix | Residual risk |
+|---|-------|-----|---------------|
+| 1 | Creator spoofing via `kubectl apply` | Mutating admission webhook | Must be deployed |
+| 2 | Unrestricted impersonation RBAC | SubjectAccessReview instead | Audit trail changes |
+| 3 | LLM prompt injection | Output validation + allowlists | Can't fully prevent |
+| 4 | Permissions ConfigMap not enforced | Code fix in fulfiller | Resource-level only |
+| 5 | Per-wish LLM endpoint override | Remove or gate the field | Breaking change |
+| 6 | Status/plan injection | CEL transition rules + RBAC | Broad cluster roles |
+| 7 | TOCTOU during fulfillment | CEL transition rules | None (server-enforced) |
+
+**CEL transition rules** (slide):
+- Declared in the CRD, enforced by the API server
+- No webhook, no extra deployment, no latency
+- Closes the TOCTOU gap: nobody can swap the YAML between review and execution
+- "Kubernetes already has the primitives to secure LLM-generated infrastructure — you just have to use them"
+
+#### MCP vs. CLI — Do we even need this? (3 min)
+
+**The provocation**: kubectl is well-documented, in every LLM training set. Why add MCP?
+
+**Against MCP**:
+- Shell is the universal MCP — agents with terminal access can just run kubectl
+- Extra abstraction = extra bugs, extra maintenance
+- Documentation is the original MCP
+
+**For MCP**:
+- Structured output vs. text parsing
+- Safety boundaries — expose exactly what you want, nothing more
+- Discoverability — tool listings vs. "guess the right kubectl flags"
+- The wish-system gap: MCP could give the grantor cluster awareness without shell access
+
+**The honest answer**:
+> "The real value of MCP isn't replacing CLIs — it's replacing the trust boundary."
+
+#### Closing (2 min)
+
+> "The YAML isn't the hard part — the feedback loop is."
+> "And the feedback loop isn't the hard part either — the trust boundary is."
+> "The best tool depends on your use case: single-shot for simple, auditable operations. Agentic for complex, exploratory tasks. And always: defense in depth."
+
+**Final slide — links + contact:**
+- https://github.com/ayourtch/k8s-wish-system
+- https://github.com/ayourtch-llm/apchat
+- https://github.com/ayourtch-llm/tttt
+- Andrew's email / social
+
+---
+
+## Demo Script for Claude Opus (read by the agent during Part 2)
+
+See `demo-script.md` — a separate file that Claude reads and executes step by step.
+
+---
+
+## Agentic Loop Comparison (captured from real run)
+
+### k8s-wish single-shot
+- 1 LLM call (Qwen3.5-27B, ~60 seconds)
+- Generated correct Deployment YAML with 3 replicas
+- Human reviewed and approved
+- Fulfiller applied via K8s API
+- **Total: 1 LLM call, 1 human review, deterministic execution**
+
+### apchat agentic loop
+- 8 LLM calls across 7 tool invocations (~5 minutes with local 27B model)
+- **Self-corrected** when label selector was wrong (step 5→6→7)
+- Checked existence before deleting, waited for rollout, verified pods
+- **Total: 8 LLM calls, 0 human reviews, adaptive execution**
+
+### The tradeoff
+
+| Dimension | Single-shot (k8s-wish) | Agentic (apchat) |
+|-----------|----------------------|-------------------|
+| LLM calls | 1 | 8 |
+| Human review | Required (dry-run) | None (auto-confirm) |
+| Self-correction | No | Yes |
+| Cluster awareness | No | Yes (reads state) |
+| Auditability | High (one plan, one review) | Lower (8 calls, branching logic) |
+| Trust boundary | Narrow (YAML only) | Wide (shell access) |
+| Cost | Low | Higher |
+| Latency | Seconds (cloud LLM) | Minutes (especially local) |
 
 ---
 
@@ -83,7 +188,7 @@
 
 ---
 
-## Security Analysis
+## Security Analysis (reference material for slides)
 
 ### What the system gets right
 1. **Dry-run by default** — wishes won't execute without explicit `kubectl wish fulfill`
@@ -137,14 +242,14 @@
 
 **What they protect against**: The TOCTOU (time-of-check-to-time-of-use) gap — between when the human reviews the plan and when the fulfiller executes it, nobody can swap the YAML or tamper with the wish.
 
-**Proposed rules on `spec`:**
+**Implemented rules on `spec`:**
 - `wish` text is immutable once set
 - `creator` identity is immutable once set
 - `dryRun` can only go `true→false` (fulfill), never `false→true`
 - `autoFulfill` is immutable once set
 - `targetNamespace` is immutable
 
-**Proposed rules on `status`:**
+**Implemented rules on `status`:**
 - `plan` is immutable once set (grantor sets it, nobody modifies it)
 - `fulfilled` is a one-way flag (can't revert to false)
 - `phase` can only move forward: Requested → Granted → Fulfilled/Failed
@@ -159,18 +264,6 @@
 - Server-enforced — no extra deployment, no webhook latency
 - Zero trust — even cluster-admins can't bypass them (without modifying the CRD)
 - Auditable — the rules are visible in `kubectl get crd -o yaml`
-
-### Security summary table
-
-| # | Issue | Fixable? | Fix | Effort | Residual risk |
-|---|-------|----------|-----|--------|---------------|
-| 1 | Creator spoofing | Yes | Mutating admission webhook | Medium | Webhook must be deployed |
-| 2 | Unrestricted impersonation | Yes | SubjectAccessReview instead | Medium | Audit trail changes |
-| 3 | Prompt injection | Partially | Output validation + allowlists | Medium | Creative injections can't be fully prevented |
-| 4 | No YAML validation | Yes | Enforce permissions ConfigMap | Small | Resource-level only |
-| 5 | Per-wish LLM override | Yes | Remove or gate the field | Small | Breaking change |
-| 6 | Plan injection via status | Yes | CEL transition rules + RBAC | Small | Broad cluster roles |
-| 7 | TOCTOU during fulfillment | Yes | CEL transition rules | Small | None (server-enforced) |
 
 ### The honest takeaway
 
