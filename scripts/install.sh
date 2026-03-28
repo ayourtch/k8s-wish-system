@@ -137,7 +137,9 @@ case $INSTALL_METHOD in
         echo -e "${GREEN}Installing wish-system...${NC}"
 
         if [[ $CLUSTER_NAME == *"kind"* ]]; then
-            make kind-deploy
+            make kind-load-runtime
+            make install-all
+            kubectl apply -f k8s/deployments-runtime.yaml
         else
             kubectl apply -f k8s/install.yaml
             kubectl wait --for condition=established --timeout=60s crd/wishes.wish.ayourt.ch
