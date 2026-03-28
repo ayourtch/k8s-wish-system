@@ -442,23 +442,57 @@ tttt TUI
 
 <!-- ==================== PART 3: Andrew concludes ==================== -->
 
-<!-- Slide 9: Agentic loop comparison -->
+<!-- Slide 9: What we just saw -->
 <div class="slide" id="s9">
-  <h2>Single-shot vs. Agentic &mdash; the numbers</h2>
+  <h2>What just happened</h2>
+  <p style="font-size:1.1em; margin-bottom:0.5em">Task: <code>Deploy nginx + Service + NetworkPolicy</code></p>
+  <div class="two-col">
+    <div class="box">
+      <h3 class="highlight">Single-shot (k8s-wish)</h3>
+      <ul>
+        <li>Simple task (nginx only): <span class="green">worked</span></li>
+        <li>Complex task (3 resources): <span class="red">silent failure</span></li>
+        <li>LLM generated <span class="green">correct</span> YAML</li>
+        <li>Fulfiller can't parse multi-doc YAML</li>
+        <li>No feedback loop = no recovery</li>
+        <li><span class="bold">1 LLM call, 1 human review</span></li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3 class="blue">Agentic (apchat)</h3>
+      <ul>
+        <li>Same complex task: <span class="green">full success</span></li>
+        <li>Created resources one by one</li>
+        <li>Self-corrected YAML indentation</li>
+        <li>Self-corrected kubectl syntax</li>
+        <li>Verified all 3 resources</li>
+        <li><span class="bold">~15 LLM calls, 2 self-corrections</span></li>
+      </ul>
+    </div>
+  </div>
+  <p style="margin-top:0.5em; text-align:center; font-size:1.2em; color:#fbbf24">
+    Same LLM. Same task. The feedback loop made the difference.
+  </p>
+</div>
+
+<!-- Slide 10: Comparison table -->
+<div class="slide" id="s10">
+  <h2>Single-shot vs. Agentic &mdash; the tradeoffs</h2>
   <table style="font-size:1.05em">
     <tr><th>Dimension</th><th>k8s-wish (single-shot)</th><th>apchat (agentic)</th></tr>
-    <tr><td>LLM calls</td><td>1</td><td>~8</td></tr>
+    <tr><td>LLM calls</td><td>1</td><td>~15</td></tr>
     <tr><td>Human review</td><td>Required (dry-run)</td><td>None (auto-confirm)</td></tr>
-    <tr><td>Self-correction</td><td class="red">No</td><td class="green">Yes</td></tr>
+    <tr><td>Self-correction</td><td class="red">No</td><td class="green">Yes (2x in demo)</td></tr>
+    <tr><td>Multi-resource tasks</td><td class="red">Fragile (multi-doc YAML)</td><td class="green">Creates separately</td></tr>
     <tr><td>Cluster awareness</td><td class="red">No</td><td class="green">Yes (reads state)</td></tr>
-    <tr><td>Auditability</td><td class="green">High</td><td class="red">Lower</td></tr>
+    <tr><td>Auditability</td><td class="green">High (one plan)</td><td class="red">Lower (many calls)</td></tr>
     <tr><td>Trust boundary</td><td class="green">Narrow (YAML only)</td><td class="red">Wide (shell access)</td></tr>
-    <tr><td>Cost</td><td class="green">Low</td><td class="highlight">Higher</td></tr>
+    <tr><td>Cost</td><td class="green">Low</td><td class="highlight">15x higher</td></tr>
   </table>
 </div>
 
-<!-- Slide 10: Security - what's right -->
-<div class="slide" id="s10">
+<!-- Slide 11: Security - what's right -->
+<div class="slide" id="s11">
   <h2>k8s-wish security &mdash; what's right</h2>
   <ul style="font-size:1.2em">
     <li><span class="green">Dry-run by default</span> &mdash; nothing executes without explicit approval</li>
@@ -470,8 +504,8 @@ tttt TUI
   <p style="margin-top:1em; font-size:1.3em; color:#fbbf24">But...</p>
 </div>
 
-<!-- Slide 11: Security gaps -->
-<div class="slide" id="s11">
+<!-- Slide 12: Security gaps -->
+<div class="slide" id="s12">
   <h2>Security gaps discovered</h2>
   <table style="font-size:0.9em">
     <tr><th>#</th><th>Issue</th><th>Fix</th><th>Residual risk</th></tr>
@@ -485,8 +519,8 @@ tttt TUI
   </table>
 </div>
 
-<!-- Slide 12: CEL rules -->
-<div class="slide" id="s12">
+<!-- Slide 13: CEL rules -->
+<div class="slide" id="s13">
   <h2>CEL transition rules &mdash; the fix</h2>
   <p>Declared in the CRD. Enforced by the API server. No webhook needed.</p>
   <div class="two-col" style="margin-top:0.5em">
@@ -523,8 +557,8 @@ tttt TUI
   </p>
 </div>
 
-<!-- Slide 13: MCP vs CLI -->
-<div class="slide" id="s13">
+<!-- Slide 14: MCP vs CLI -->
+<div class="slide" id="s14">
   <h2>MCP vs. CLI &mdash; do we even need this?</h2>
   <div class="two-col">
     <div class="box">
@@ -552,8 +586,8 @@ tttt TUI
   </div>
 </div>
 
-<!-- Slide 14: Closing thoughts -->
-<div class="slide" id="s14">
+<!-- Slide 15: Closing thoughts -->
+<div class="slide" id="s15">
   <h2>Takeaways</h2>
   <ul style="font-size:1.3em; line-height:2">
     <li>Single-shot: simple, auditable, needs human review</li>
@@ -567,8 +601,8 @@ tttt TUI
   </div>
 </div>
 
-<!-- Slide 15: Links -->
-<div class="slide" id="s15">
+<!-- Slide 16: Links -->
+<div class="slide" id="s16">
   <div style="text-align:center; flex:1; display:flex; flex-direction:column; justify-content:center;">
     <h1 style="margin-bottom:0.8em">Thank you!</h1>
     <div class="repos">
