@@ -414,33 +414,40 @@
 <div class="slide" id="s10">
   <h2>tttt &mdash; Takes Two To Tango</h2>
   <p>A terminal multiplexer where <span class="highlight">the AI is in control</span></p>
-  <div class="code-block" style="font-size:0.85em; margin:0.8em 0">Root Agent (Claude Opus)
-    |  calls MCP tools
-    v
+  <div class="two-col" style="margin-top:0.5em">
+    <div>
+      <div class="code-block" style="font-size:0.75em; margin:0; padding:14px 20px">Root Agent (Claude Opus)
+  | calls MCP tools
+  v
 tttt TUI
-    +-- PTY Session 1: root agent (Claude Code)
-    +-- PTY Session 2: worker agent (Sonnet)
-    +-- PTY Session 3: another worker / bash / kubectl
-    +-- Sidebar: messages, reminders, status
-    +-- Scheduler: cron jobs, one-shot reminders
-    +-- SQLite logger: full session replay</div>
-  <div class="two-col">
-    <div class="box">
-      <h3>MCP tools (30+)</h3>
-      <ul>
-        <li><code>tttt_pty_launch</code> / <code>send_keys</code> / <code>get_screen</code></li>
-        <li><code>tttt_pty_wait_for_idle</code></li>
-        <li><code>tttt_notify_on_pattern</code></li>
-        <li><code>tttt_sidebar_message</code></li>
-      </ul>
+  +-- PTY 1: root (Claude Code)
+  +-- PTY 2: worker (Sonnet)
+  +-- PTY 3: bash / kubectl
+  +-- Sidebar + Scheduler
+  +-- SQLite session replay</div>
+      <div class="box" style="margin-top:0.5em">
+        <h3>MCP tools (30+)</h3>
+        <ul>
+          <li><code>pty_launch</code> / <code>send_keys</code> / <code>get_screen</code></li>
+          <li><code>wait_for_idle</code> / <code>notify_on_pattern</code></li>
+          <li><code>sidebar_message</code> / <code>scratchpad</code></li>
+        </ul>
+      </div>
     </div>
     <div class="box">
       <h3>Key insight</h3>
       <ul>
         <li>tmux is human-operated</li>
-        <li>tttt is AI-operated</li>
-        <li>Human observes via TUI or <code>tttt attach</code></li>
+        <li>tttt is <span class="highlight">AI-operated</span></li>
+        <li>Human observes via TUI</li>
+        <li>Or from phone: <code>tttt attach</code></li>
         <li>Live reload without losing sessions</li>
+      </ul>
+      <h3 style="margin-top:0.5em">What makes it different</h3>
+      <ul>
+        <li><code>wait_for_idle</code> &mdash; no polling</li>
+        <li>Auto rate-limit handling</li>
+        <li>Cross-session automation</li>
       </ul>
     </div>
   </div>
