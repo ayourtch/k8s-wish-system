@@ -29,14 +29,39 @@
 - When to use which: simple/known patterns → single-shot; complex/exploratory → agentic
 - The trust spectrum: human-in-the-loop (wish system) vs. autonomous agent (tttt)
 
-### Act 4: The MCP + K8s angle (3-4 min)
-- MCP as the glue: standardized tool interface for AI ↔ infrastructure
-- Idea of a K8s MCP server: expose `kubectl get`, `kubectl logs`, pod status as MCP tools
-- This would let any MCP-compatible agent (Claude Code, apchat, etc.) talk to your cluster natively
-- Could bridge both approaches: wish-system could use MCP tools for cluster awareness
+### Act 4: MCP vs. CLI — Do We Even Need This? (5 min)
+
+**The provocation**: kubectl is well-documented, has bash completion, rich help text, and decades of muscle memory in the community. Why would we add an MCP layer?
+
+#### The case AGAINST MCP for K8s
+- **kubectl already works**: `kubectl get pods`, `kubectl logs`, `kubectl apply` — every LLM already knows these commands. They're in every training set.
+- **Shell is the universal MCP**: An agent with a terminal (like Claude Code, apchat+tttt) can already run `kubectl` directly. No MCP server needed.
+- **Extra abstraction = extra bugs**: An MCP server wrapping kubectl is a translation layer that can lose fidelity, go stale when K8s APIs change, and adds a dependency to maintain.
+- **The LLM already speaks kubectl**: Ask any frontier model to write a kubectl command and it will. The problem was never "how do I talk to K8s" — it was "how do I talk to K8s *safely*."
+- **Documentation is the original MCP**: Well-written `--help` text and man pages are already tool descriptions. The LLM reads them.
+
+#### The case FOR MCP for K8s
+- **Structured output vs. text parsing**: `kubectl get pods -o json` works, but the agent has to know to ask for JSON, parse it, handle pagination. MCP gives you typed responses natively.
+- **Safety boundaries**: An MCP server can enforce read-only access, namespace scoping, resource allowlists — things that are hard to enforce when the agent has raw shell access.
+- **Discoverability**: MCP tool listings tell the agent exactly what it can do. With raw kubectl, the agent has to guess or explore.
+- **Composability**: MCP tools can be composed across systems — K8s + Prometheus + PagerDuty in one agent context, all with the same interface.
+- **The wish-system gap**: k8s-wish-system can't inspect cluster state before generating a plan. An MCP server could give the grantor awareness of existing resources, making the single-shot approach smarter.
+
+#### The honest answer
+- For **agentic tools with terminal access** (Claude Code, apchat+tttt): MCP for K8s is mostly redundant. The agent can just run kubectl.
+- For **constrained environments** (chatbots, CI/CD pipelines, non-terminal agents): MCP provides a structured, safe interface.
+- For **the wish-system specifically**: MCP would be valuable as a way to give the grantor read-only cluster awareness without giving it shell access.
+- **The real value of MCP isn't replacing CLIs — it's replacing the trust boundary.** A CLI with shell access is all-or-nothing. MCP lets you expose exactly the operations you want, with exactly the permissions you choose.
+
+#### The meta-observation
+- We're watching the same pattern that played out with REST APIs vs. CLIs
+- CLIs came first, APIs came later for programmatic access
+- MCP is the "API layer" for AI agents — not replacing CLIs, but complementing them
+- The question isn't "MCP or CLI?" — it's "when does structured tool access matter more than raw shell power?"
 
 ### Closing (2 min)
 - "The YAML isn't the hard part — the feedback loop is"
+- "And the feedback loop isn't the hard part either — the trust boundary is"
 - Links to all three repos
 - Q&A
 
