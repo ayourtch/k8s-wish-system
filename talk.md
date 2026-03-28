@@ -37,41 +37,39 @@
 
 ---
 
-### Part 2: Claude Opus drives demos via tttt — ~12 min
+### Part 2: Claude Opus drives demos via tttt — ~15 min
 
 Claude reads `demo-script.md` and executes the demos live, with sidebar commentary.
 
-#### Demo 1: k8s-wish single-shot (4 min)
-1. Show the kind cluster is running: `kubectl get pods -n wish-system`
-2. Create a wish: `kubectl wish create "Deploy nginx with 3 replicas"`
-3. Wait for the LLM to generate the plan
-4. Show the plan: `kubectl wish describe <wish-name>`
-5. Fulfill it: `kubectl wish fulfill <wish-name>`
-6. Verify: `kubectl get pods` — 3 nginx pods running
-7. **Sidebar commentary**: "One LLM call. One plan. One review. Simple and auditable."
+#### Demo 1a: k8s-wish — simple task (4 min)
+1. Show the kind cluster: `kubectl get pods -n wish-system`
+2. Create a simple wish: `kubectl wish create "Deploy nginx with 3 replicas"`
+3. Wait for LLM → show the plan → fulfill it
+4. Verify: `kubectl get pods` — 3 nginx pods running
+5. **Single-shot works great for simple tasks!**
+6. Keep this wish around (needed for Demo 3)
+
+#### Demo 1b: k8s-wish — complex task (4 min)
+1. Same approach, harder task: Deployment + Service + NetworkPolicy
+2. LLM generates **correct** multi-document YAML
+3. Human reviews — looks good. Fulfill it.
+4. **Nothing was created!** Fulfiller can't parse multi-doc YAML.
+5. Check logs: "deserializing from YAML containing more than one document is not supported"
+6. **The LLM was right, the system wasn't ready. No feedback loop = no recovery.**
 
 #### Demo 2: apchat agentic loop (5 min)
-1. Delete the nginx deployment first
-2. Launch apchat with the same LLM
-3. Give it the same task: "Deploy nginx with 3 replicas and verify all pods are running"
-4. Watch the agentic loop:
-   - Step 1: `kubectl get deployment nginx-deployment` — checks if it exists
-   - Step 2: `kubectl delete deployment nginx-deployment` — cleans up
-   - Step 3: `kubectl create deployment nginx-deployment --image=nginx --replicas=3` — deploys
-   - Step 4: `kubectl rollout status deployment/nginx-deployment` — waits for rollout
-   - Step 5: `kubectl get pods -l app=nginx` — **wrong label, no results!**
-   - Step 6: `kubectl get deployment -o yaml | head -30` — **self-corrects**, inspects YAML to find actual label
-   - Step 7: `kubectl get pods -l app=nginx-deployment` — finds all 3 pods running
-5. **Sidebar commentary**: "7 tool calls. Self-corrected on step 5. The single-shot approach can't do this."
+1. Same complex task (Deployment + Service + NetworkPolicy), same LLM
+2. Agent creates each resource separately (~15 tool calls)
+3. Self-corrects twice: fixes YAML indentation, fixes kubectl syntax
+4. Verifies all three resources: pods running, service active, networkpolicy applied
+5. **Same LLM, same task. Feedback loop made the difference.**
 
 #### Demo 3: CEL transition rules (3 min)
-1. Try to tamper with the fulfilled wish: `kubectl patch wish <name> --type merge -p '{"spec":{"wish":"Deploy redis instead"}}'`
-   - **Blocked**: "wish text cannot be changed after creation"
-2. Try to spoof creator: `kubectl patch wish <name> --type merge -p '{"spec":{"creator":{"username":"evil","groups":["system:masters"]}}}'`
-   - **Blocked**: "creator identity cannot be changed after creation"
-3. Try to re-enable dryRun: `kubectl patch wish <name> --type merge -p '{"spec":{"dryRun":true}}'`
-   - **Blocked**: "dryRun cannot be re-enabled after disabling"
-4. **Sidebar commentary**: "CEL rules. No webhook. No extra code. The API server does the work."
+1. Use the fulfilled wish from Demo 1a
+2. Try to change wish text → **BLOCKED**
+3. Try to spoof creator identity → **BLOCKED**
+4. Try to re-enable dryRun → **BLOCKED**
+5. "CEL rules. Declarative. Server-enforced. No webhook needed."
 
 ---
 

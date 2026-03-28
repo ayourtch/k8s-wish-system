@@ -94,17 +94,118 @@ Launch two PTY sessions and clean up previous state:
 
 ---
 
-## Demo 1: k8s-wish single-shot (~5 min)
+## Demo 1a: k8s-wish single-shot — the simple case (~4 min)
 
-The task is deliberately complex enough to require multiple K8s resources.
+A simple single-resource task. This should work perfectly.
+
+**Sidebar stack:**
+```
+"=== DEMO 1a ==="
+"The single-shot"
+"approach."
+"One wish -> one plan."
+"Let's start simple."
+```
+
+### Step 1: Show the cluster
+In `k8s` PTY:
+```
+kubectl get pods -n wish-system
+```
+**Sidebar stack:**
+```
+"Two controllers:"
+"grantor = thinker"
+"fulfiller = doer"
+"Separation of concerns."
+```
+
+### Step 2: Create a simple wish
+```
+./target/release/kubectl-wish create "Deploy nginx with 3 replicas"
+```
+Note the wish name from the output.
+
+**Sidebar stack:**
+```
+"Wish created."
+"Natural language in..."
+"Let's see what the LLM"
+"comes up with."
+```
+
+### Step 3: Wait for the LLM
+The local 27B model needs 60-90 seconds. Poll every 15-20 seconds:
+```
+./target/release/kubectl-wish describe <wish-name>
+```
+
+While waiting, entertain with sidebar:
+```
+"LLM is thinking..."
+"27 billion parameters"
+"running on a desktop GPU"
+"somewhere in Europe"
+"(please work)"
+```
+
+Once the phase changes to `Granted`, show the plan:
+```
+"It worked!"
+"One shot. One plan."
+"Check out the YAML..."
+```
+
+### Step 4: Fulfill it
+```
+./target/release/kubectl-wish fulfill <wish-name>
+```
+Wait ~10 seconds, then:
+```
+kubectl get pods
+```
+**Sidebar stack:**
+```
+"Fulfilled!"
+"English -> YAML -> pods"
+"No human wrote YAML."
+"(the LLM did)"
+"3/3 Running. Nice."
+```
+
+### Step 5: Recap
+```
+./target/release/kubectl-wish list
+```
+**Sidebar stack:**
+```
+"Recap:"
+"1 LLM call"
+"1 human review"
+"Simple. Auditable."
+"Works great for"
+"single resources."
+"But what about"
+"something harder?"
+```
+
+**Important**: Do NOT delete this wish or the nginx deployment yet. We need the fulfilled wish for Demo 3 (CEL rules), and the deployment can stay.
+
+---
+
+## Demo 1b: k8s-wish single-shot — the complex case (~4 min)
+
+Now we escalate. A task that requires multiple K8s resources.
 This will expose a real limitation of the single-shot architecture.
 
 **Sidebar stack:**
 ```
-"=== DEMO 1 ==="
-"The single-shot"
-"approach."
-"One wish -> one plan."
+"=== DEMO 1b ==="
+"Same approach."
+"Harder task."
+"Three resources."
+"One LLM call."
+"What could go wrong?"
 ```
 
 ### Step 1: Show the cluster
@@ -346,11 +447,7 @@ Send `/quit` or Ctrl+D to exit apchat.
 "Let's find out."
 ```
 
-For this demo, we need a fulfilled wish. Create a simple one first:
-```
-./target/release/kubectl-wish create "Create a test pod named hello"
-```
-Wait for it to be granted, then fulfill it. If the previous wish from Demo 1 is still around and shows as Fulfilled (even though nothing was actually applied), you can use that one instead.
+Use the fulfilled wish from Demo 1a (the simple "Deploy nginx with 3 replicas" wish). It should still be around and marked as Fulfilled.
 
 ### Step 1: Show the fulfilled wish
 In `k8s` PTY:
